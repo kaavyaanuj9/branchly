@@ -1,36 +1,31 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# HypoTree
 
-## Getting Started
+A tree-shaped workspace where a scientist and AI assistants test a hypothesis together.
+This is the front end only. AI replies are **simulated** (no paid APIs yet).
 
-First, run the development server:
+## Run it
 
 ```bash
+cd hypotree-app
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Then open http://localhost:3000. Stop the server with `Ctrl + C`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Where things live
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| File | What it does |
+| --- | --- |
+| `src/lib/sampleData.ts` | The sample Venetoclax / BCL-2 hypotheses. Edit this to change the starting tree. |
+| `src/lib/types.ts` | The shape of a box (idea, experiment, suggestion) and chat messages. |
+| `src/lib/store.tsx` | All app data and the actions that change it; saves to your browser. |
+| `src/lib/mockAgent.ts` | The pretend AI. Replace these functions with real AI calls later. |
+| `src/lib/tree.ts` | Tree helpers and the layout that positions the boxes. |
+| `src/components/HypoTreeApp.tsx` | The full screen: header, toolbar, canvas, panels. |
+| `src/components/TreeCanvas.tsx` | The zoomable tree (React Flow). |
+| `src/components/HypoNode.tsx` | How each box looks. |
+| `src/components/DetailPanel.tsx` | The middle panel with a box's details. |
+| `src/components/ChatPanel.tsx` | The per-box AI assistant. |
+| `src/components/Modals.tsx` | Pop-ups: add/edit, upload results, help. |
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+To start over with the sample data, open the **?** help menu and click **Reset demo project**.
