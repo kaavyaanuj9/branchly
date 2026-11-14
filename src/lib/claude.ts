@@ -378,3 +378,47 @@ JSON shape:
 
   return JSON.parse(jsonMatch[0]);
 }
+
+/**
+ * Idea studio: turn a scientist's rough idea (and any follow-up messages) into one sharp,
+ * testable hypothesis, split into problem / method / setting for the field check.
+ */
+export interface Formulation {
+  reply: string;
+  hypothesis: string;
+  problem: string;
+  method: string;
+  setting: string;
+  why: string;
+}
+
+export async function formulateIdeaWithClaude(
+  messages: { role: "user" | "assistant"; content: string }[],
+): Promise<Formulation> {
+  const system = `You help a biomedical scientist turn a rough idea into ONE sharp, testable hypothesis.
+- Keep their intent; make it specific (what causes what, in which system) and falsifiable.
+- One sentence, at most ~35 words, no hedging words like "may" or "might".
+- Split it into: problem (the question or phenomenon), method (the intervention or approach), setting (the model system or population). Leave a part "" if the idea really has none.
+- "reply": 1-2 friendly sentences to the scientist: what you sharpened and, if useful, one question that would make it better. No [n] citation markers here: the papers are shown separately.
+- "why": one sentence on what result would support it and what would refute it.
+When they reply with changes, revise the hypothesis accordingly.
+Return ONLY a JSON object: {"reply": "...", "hypothesis": "...", "problem": "...", "method": "...", "setting": "...", "why": "..."}`;
+  const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
+  const raw = await complete({
+    system: await withLiterature(system, lastUser),
+    messages: messages.map((m) => ({ role: m.role, content: m.content })) as LLMMessage[],
+    maxTokens: 800,
+  });
+  const json = raw.match(/\{[\s\S]*\}/);
+  if (!json) throw new Error("Claude did not return a hypothesis. Please try again.");
+  const f = JSON.parse(json[0]) as Partial<Formulation>;
+  if (!f.hypothesis) throw new Error("Claude did not return a hypothesis. Please try again.");
+  return {
+    reply: f.reply || "Here is a sharper, testable version.",
+    hypothesis: f.hypothesis,
+    problem: f.problem || "",
+    method: f.method || "",
+    setting: f.setting || "",
+    why: f.why || "",
+  };
+}

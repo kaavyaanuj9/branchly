@@ -42,7 +42,7 @@ type Action =
   | { type: "load"; saved: Partial<AppState> | null }
   | { type: "reset" }
   | { type: "openProject"; project: SavedProject & { projectId: string } }
-  | { type: "newProject"; title: string; nodes: TreeNode[]; selectedId?: string }
+  | { type: "newProject"; title: string; nodes: TreeNode[]; selectedId?: string; chats?: Record<string, ChatMessage[]> }
   | { type: "select"; id: string | null }
   | { type: "addNode"; node: TreeNode; select?: boolean }
   | { type: "updateNode"; id: string; patch: Partial<TreeNode> }
@@ -91,7 +91,7 @@ function reducer(state: AppState, action: Action): AppState {
         projectId: newId(),
         title: action.title,
         nodes: action.nodes,
-        chats: {},
+        chats: action.chats ?? {},
         selectedId: action.selectedId ?? null,
         hydrated: true,
       };

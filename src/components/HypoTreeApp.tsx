@@ -1,11 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { AnimatePresence } from "motion/react";
+import { useRouter } from "next/navigation";
 import { ReactFlowProvider } from "@xyflow/react";
 import {
   BookOpen,
   ChevronsUpDown,
   CircleHelp,
+  LogOut,
+  Lightbulb,
   FlaskConical,
   MessageSquare,
   MessageSquareOff,
@@ -17,6 +21,7 @@ import {
 } from "lucide-react";
 import { getProject, listProjects, StoreProvider, useStore } from "@/lib/store";
 import { FieldSync } from "./FieldSync";
+import { IdeaStudio } from "./IdeaStudio";
 import { findNode } from "@/lib/tree";
 import { TreeCanvas } from "./TreeCanvas";
 import { FieldMapView } from "./FieldMapView";
@@ -29,18 +34,27 @@ import { UIContext, type EditorRequest, type UIContextValue } from "./uiContext"
 
 // The whole HypoTree screen: header, toolbar, tree, detail panel and chat.
 
-export function HypoTreeApp() {
+export interface SignedInUser {
+  email: string;
+  name: string;
+  picture?: string;
+  demo?: boolean;
+}
+
+export function HypoTreeApp({ user, startInStudio = false }: { user: SignedInUser; startInStudio?: boolean }) {
   return (
     <StoreProvider>
       <ReactFlowProvider>
-        <Workspace />
+        <Workspace user={user} startInStudio={startInStudio} />
       </ReactFlowProvider>
     </StoreProvider>
   );
 }
 
-function Workspace() {
+function Workspace({ user, startInStudio }: { user: SignedInUser; startInStudio: boolean }) {
   const { state, dispatch } = useStore();
+  // the idea studio: chat an idea -> field map -> a new hypothesis tree
+  const [studio, setStudio] = useState(startInStudio);
   const [chatOpen, setChatOpen] = useState(true);
   const [editor, setEditor] = useState<EditorRequest | null>(null);
   const [uploadFor, setUploadFor] = useState<string | null>(null);
@@ -110,6 +124,23 @@ function Workspace() {
   return (
     <UIContext.Provider value={ui}>
       <FieldSync />
+      <AnimatePresence>
+        {studio && (
+          <IdeaStudio
+            key="studio"
+            user={user}
+            onDone={() => {
+              setStudio(false);
+              setView("project");
+              window.history.replaceState(null, "", "/");
+            }}
+            onClose={() => {
+              setStudio(false);
+              window.history.replaceState(null, "", "/");
+            }}
+          />
+        )}
+      </AnimatePresence>
       <div className="flex h-dvh flex-col bg-white text-slate-900">
         {/* Header */}
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200 px-5">
@@ -143,12 +174,20 @@ function Workspace() {
               ))}
             </div>
             <button
+              onClick={() => setStudio(true)}
+              className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-emerald-600 px-3 py-1.5 text-[13px] font-semibold text-white shadow-sm transition hover:opacity-90"
+              title="Start from a new idea"
+            >
+              <Lightbulb className="size-3.5" /> New idea
+            </button>
+            <button
               onClick={() => setHelpOpen(true)}
               className="rounded-full p-1 transition hover:bg-slate-100 hover:text-slate-900"
               title="How HypoTree works"
             >
               <CircleHelp className="size-5" />
             </button>
+            <UserChip user={user} />
           </div>
         </header>
 
@@ -321,6 +360,45 @@ function ProjectSwitcher() {
           <p className="border-t border-slate-100 px-2 pb-1 pt-2 text-[11.5px] text-slate-500">
             Start a new project from an idea on the <b>Field map</b>: search it, then “Start a new hypothesis tree”.
           </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Who is signed in, with sign-out. */
+function UserChip({ user }: { user: SignedInUser }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        title={user.email}
+        className="flex size-8 items-center justify-center overflow-hidden rounded-full bg-indigo-100 text-[13px] font-semibold text-indigo-800 ring-2 ring-white"
+      >
+        {user.picture ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={user.picture} alt="" referrerPolicy="no-referrer" className="size-full object-cover" />
+        ) : (
+          user.name.slice(0, 1).toUpperCase()
+        )}
+      </button>
+      {open && (
+        <div className="absolute right-0 top-10 z-50 w-64 rounded-xl border border-slate-200 bg-white p-3 text-[13px] shadow-lg">
+          <p className="font-semibold text-slate-900">{user.name}</p>
+          <p className="truncate text-slate-500">{user.email}</p>
+          {user.demo && <p className="mt-1 text-[11.5px] text-amber-700">Demo sign-in (email not verified)</p>}
+          <button
+            onClick={async () => {
+              await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+              router.replace("/login");
+              router.refresh();
+            }}
+            className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 py-1.5 text-slate-700 hover:bg-slate-50"
+          >
+            <LogOut className="size-3.5" /> Sign out
+          </button>
         </div>
       )}
     </div>
