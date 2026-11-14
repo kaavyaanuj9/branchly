@@ -1,19 +1,17 @@
-import Anthropic from "@anthropic-ai/sdk";
-import type { Proposal, TreeNode } from "./types";
+import { complete, type LLMMessage } from "./llm";
+import { literatureContext } from "./researchTree";
 
-export function getAnthropicClient(): { client: Anthropic; model: string } {
-  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
-  if (!apiKey) {
-    throw new Error(
-      "ANTHROPIC_API_KEY is not configured. Please add your Anthropic API key to .env.local (ANTHROPIC_API_KEY=sk-ant-...)",
-    );
-  }
+/** Real papers from the field map, appended to a system prompt (empty if the map is down). */
+async function withLiterature(system: string, about: string): Promise<string> {
+  const lit = await literatureContext(about);
+  if (!lit) return system;
+  return `${system}
 
-  // Uses Sonnet 5.5 medium as requested, overridable via ANTHROPIC_MODEL env var
-  const model = process.env.ANTHROPIC_MODEL?.trim() || "claude-sonnet-5.5";
-  const client = new Anthropic({ apiKey });
-  return { client, model };
+RELEVANT LITERATURE (the closest papers in the Research Tree field map; cite them as [n] when you
+use them, and say plainly when none of them addresses the question; never invent other citations):
+${lit}`;
 }
+import type { Proposal, TreeNode } from "./types";
 
 /**
  * Extracts a structured Proposal object if Claude embedded one in a ```proposal block
@@ -68,7 +66,6 @@ export async function chatWithNodeAgent({
   history: { role: "user" | "assistant"; content: string }[];
   question: string;
 }): Promise<{ text: string; proposal?: Proposal }> {
-  const { client, model } = getAnthropicClient();
 
   const roleTitle =
     node.kind === "root"
@@ -129,7 +126,7 @@ YOUR INSTRUCTIONS:
 
 The user can click one button to accept your proposal into their hypothesis tree canvas. Keep your prose concise and impactful.`;
 
-  const messages: Anthropic.MessageParam[] = [
+  const messages: LLMMessage[] = [
     ...history.map((m) => ({
       role: m.role,
       content: m.content,
@@ -140,17 +137,13 @@ The user can click one button to accept your proposal into their hypothesis tree
     },
   ];
 
-  const response = await client.messages.create({
-    model,
-    max_tokens: 1500,
-    system: contextPrompt,
-    messages,
-  });
+  const groundedPrompt = await withLiterature(contextPrompt, [node.title, parent?.title].filter(Boolean).join(" — "));
 
-  const rawText = response.content
-    .filter((c) => c.type === "text")
-    .map((c) => (c as Anthropic.TextBlock).text)
-    .join("\n");
+  const rawText = await complete({
+    system: groundedPrompt,
+    messages: messages,
+    maxTokens: 1500,
+  });
 
   return extractProposalFromClaudeResponse(rawText);
 }
@@ -173,7 +166,6 @@ export async function interpretExperimentResultWithClaude({
   interpretation: string;
   suggestions: Omit<TreeNode, "id" | "parentId">[];
 }> {
-  const { client, model } = getAnthropicClient();
 
   const systemPrompt = `You are a senior Principal Investigator and mechanistic biologist.
 You are evaluating experimental results uploaded by a scientist for an experiment node in an interactive hypothesis tree.
@@ -229,17 +221,11 @@ Respond strictly with valid JSON with this shape:
   ]
 }`;
 
-  const response = await client.messages.create({
-    model,
-    max_tokens: 2500,
+  const rawText = await complete({
     system: systemPrompt,
     messages: [{ role: "user", content: userPrompt }],
+    maxTokens: 2500,
   });
-
-  const rawText = response.content
-    .filter((c) => c.type === "text")
-    .map((c) => (c as Anthropic.TextBlock).text)
-    .join("\n");
 
   // Parse JSON response
   let parsed: {
@@ -293,7 +279,6 @@ export async function decomposeHypothesisWithClaude({
     expectedResult?: string;
   }[];
 }> {
-  const { client, model } = getAnthropicClient();
 
   const systemPrompt = `You are an expert scientific strategist specializing in breaking down hypotheses into testable sub-claims and definitive experiments.
 Return strictly a valid JSON object.`;
@@ -323,17 +308,11 @@ JSON format:
   ]
 }`;
 
-  const response = await client.messages.create({
-    model,
-    max_tokens: 2000,
-    system: systemPrompt,
+  const rawText = await complete({
+    system: await withLiterature(systemPrompt, node.title),
     messages: [{ role: "user", content: userPrompt }],
+    maxTokens: 2000,
   });
-
-  const rawText = response.content
-    .filter((c) => c.type === "text")
-    .map((c) => (c as Anthropic.TextBlock).text)
-    .join("\n");
 
   const jsonMatch = rawText.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
@@ -364,7 +343,6 @@ export async function analyzePaperImpactWithClaude({
   summary: string;
   evidenceExtract: string;
 }> {
-  const { client, model } = getAnthropicClient();
 
   const systemPrompt = `You are a literature curation agent assessing whether a published paper supports or challenges a scientific hypothesis. Return strictly valid JSON.`;
 
@@ -387,17 +365,11 @@ JSON shape:
   "evidenceExtract": "..."
 }`;
 
-  const response = await client.messages.create({
-    model,
-    max_tokens: 800,
+  const rawText = await complete({
     system: systemPrompt,
     messages: [{ role: "user", content: userPrompt }],
+    maxTokens: 800,
   });
-
-  const rawText = response.content
-    .filter((c) => c.type === "text")
-    .map((c) => (c as Anthropic.TextBlock).text)
-    .join("\n");
 
   const jsonMatch = rawText.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {

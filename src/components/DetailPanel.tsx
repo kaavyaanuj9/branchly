@@ -21,6 +21,7 @@ import {
 import { useStore } from "@/lib/store";
 import { childrenOf, findNode } from "@/lib/tree";
 import type { TreeNode } from "@/lib/types";
+import { FieldPanel } from "./FieldPanel";
 import { StatusBadge } from "./StatusBadge";
 import { useUI } from "./uiContext";
 
@@ -359,6 +360,8 @@ export function DetailPanel({ node }: { node: TreeNode }) {
             </button>
           </div>
         </Section>
+
+        {node.kind !== "suggestion" && <FieldPanel node={node} parent={parent} />}
 
         {subHypotheses.length > 0 && (
           <Section title="Sub-hypotheses">

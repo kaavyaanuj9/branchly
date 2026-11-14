@@ -86,6 +86,8 @@ export interface TreeNode {
   collapsed?: boolean;
   /** Idea that didn't hold up, folded away but kept for the record. */
   folded?: boolean;
+  /** Research Tree alert watching the field for new papers on this box (its token). */
+  fieldWatch?: string;
   foldedReason?: string;
 }
 
