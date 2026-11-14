@@ -23,20 +23,20 @@ function Modal({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-[2px]"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/30 p-4 backdrop-blur-[2px]"
       onMouseDown={onClose}
     >
       <div
         onMouseDown={(e) => e.stopPropagation()}
-        className={`flex max-h-[90vh] w-full flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/5 ${
+        className={`flex max-h-[90vh] w-full flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-neutral-900/5 ${
           wide ? "max-w-2xl" : "max-w-lg"
         }`}
       >
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-          <h2 className="text-[15px] font-semibold text-slate-900">{title}</h2>
+        <div className="flex items-center justify-between border-b border-neutral-100 px-6 py-4">
+          <h2 className="text-[15px] font-semibold text-neutral-900">{title}</h2>
           <button
             onClick={onClose}
-            className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+            className="rounded-md p-1 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
           >
             <X className="size-4" />
           </button>
@@ -48,13 +48,13 @@ function Modal({
 }
 
 const inputClass =
-  "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100";
+  "w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-800 outline-none transition placeholder:text-neutral-400 focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100";
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <label className="block space-y-1.5">
-      <span className="text-[13px] font-medium text-slate-700">
-        {label} {hint && <span className="font-normal text-slate-400">{hint}</span>}
+      <span className="text-[13px] font-medium text-neutral-700">
+        {label} {hint && <span className="font-normal text-neutral-400">{hint}</span>}
       </span>
       {children}
     </label>
@@ -143,8 +143,8 @@ export function NodeEditorModal({
         }}
       >
         {parent && (
-          <p className="rounded-lg bg-slate-50 px-3 py-2 text-[12.5px] leading-snug text-slate-500">
-            <span className="font-medium text-slate-600">Under: </span>
+          <p className="rounded-lg bg-neutral-50 px-3 py-2 text-[12.5px] leading-snug text-neutral-500">
+            <span className="font-medium text-neutral-600">Under: </span>
             {parent.title}
           </p>
         )}
@@ -160,8 +160,8 @@ export function NodeEditorModal({
                   kind === k
                     ? k === "experiment"
                       ? "border-rose-400 bg-rose-50 text-rose-700"
-                      : "border-indigo-400 bg-indigo-50 text-indigo-700"
-                    : "border-slate-200 text-slate-500 hover:bg-slate-50"
+                      : "border-neutral-500 bg-neutral-100 text-neutral-900"
+                    : "border-neutral-200 text-neutral-500 hover:bg-neutral-50"
                 }`}
               >
                 {k === "experiment" ? <FlaskConical className="size-4" /> : <GitBranch className="size-4" />}
@@ -233,14 +233,14 @@ export function NodeEditorModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+              className="rounded-lg px-4 py-2 text-sm font-medium text-neutral-600 hover:bg-neutral-100"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={!title.trim()}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300"
+              className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 disabled:bg-neutral-300"
             >
               {request.mode === "edit" ? "Save changes" : "Add to tree"}
             </button>
@@ -337,7 +337,7 @@ export function UploadResultModal({ experimentId, onClose }: { experimentId: str
       <div className="space-y-4">
         <div className="rounded-lg bg-rose-50/60 px-3 py-2.5 text-[12.5px] leading-snug">
           <p className="font-semibold text-rose-700">{exp.title}</p>
-          {exp.expectedResult && <p className="mt-0.5 text-slate-500">Expected: {exp.expectedResult}</p>}
+          {exp.expectedResult && <p className="mt-0.5 text-neutral-500">Expected: {exp.expectedResult}</p>}
         </div>
 
         <Field label="What did you observe?">
@@ -353,7 +353,7 @@ export function UploadResultModal({ experimentId, onClose }: { experimentId: str
 
         <Field label="Attach data, graphs or notes" hint="(optional)">
           <div className="space-y-2">
-            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-200 py-4 text-sm text-slate-500 transition hover:border-slate-300 hover:bg-slate-50">
+            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-neutral-200 py-4 text-sm text-neutral-500 transition hover:border-neutral-300 hover:bg-neutral-50">
               <Upload className="size-4" /> Choose files
               <input
                 type="file"
@@ -369,17 +369,17 @@ export function UploadResultModal({ experimentId, onClose }: { experimentId: str
                 {files.map((f) => (
                   <span
                     key={f}
-                    className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-600"
+                    className="inline-flex items-center gap-1 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-0.5 text-xs text-neutral-600"
                   >
                     <FileText className="size-3" /> {f}
-                    <button onClick={() => setFiles(files.filter((x) => x !== f))} className="text-slate-400 hover:text-slate-700">
+                    <button onClick={() => setFiles(files.filter((x) => x !== f))} className="text-neutral-400 hover:text-neutral-700">
                       <X className="size-3" />
                     </button>
                   </span>
                 ))}
               </div>
             )}
-            <p className="text-[11.5px] text-slate-400">
+            <p className="text-[11.5px] text-neutral-400">
               Demo mode: only file names are saved. Files stay on your computer.
             </p>
           </div>
@@ -393,7 +393,7 @@ export function UploadResultModal({ experimentId, onClose }: { experimentId: str
                 key={o.value}
                 onClick={() => setOutcome(o.value)}
                 className={`rounded-lg border px-2.5 py-2 text-left transition ${
-                  outcome === o.value ? o.cls : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                  outcome === o.value ? o.cls : "border-neutral-200 text-neutral-600 hover:bg-neutral-50"
                 }`}
               >
                 <span className="block text-sm font-semibold">{o.label}</span>
@@ -403,7 +403,7 @@ export function UploadResultModal({ experimentId, onClose }: { experimentId: str
           </div>
         </Field>
         {outcome === "contradicted" && (
-          <p className="text-[12.5px] text-sky-700">
+          <p className="text-[12.5px] text-neutral-900">
             Claude Sonnet 5.5 will formulate three new counter-hypotheses with follow-up experiments to explain this anomaly.
           </p>
         )}
@@ -422,14 +422,14 @@ export function UploadResultModal({ experimentId, onClose }: { experimentId: str
           <button
             onClick={onClose}
             disabled={loading}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+            className="rounded-lg px-4 py-2 text-sm font-medium text-neutral-600 hover:bg-neutral-100 disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={submit}
             disabled={!notes.trim() || !outcome || loading}
-            className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300"
+            className="flex items-center gap-1.5 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 disabled:bg-neutral-300"
           >
             {loading ? <Loader2 className="size-4 animate-spin" /> : null}
             {loading ? "Claude is analyzing…" : "Save & ask Claude to interpret"}
@@ -453,33 +453,33 @@ export function HelpModal({ onClose }: { onClose: () => void }) {
       <div className="space-y-6">
         <ol className="grid gap-3 sm:grid-cols-2">
           {steps.map(([t, d], i) => (
-            <li key={t} className="rounded-xl border border-slate-200 p-4">
-              <p className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-900">
-                <span className="flex size-5 items-center justify-center rounded-full bg-indigo-700 text-[11px] text-white">
+            <li key={t} className="rounded-xl border border-neutral-200 p-4">
+              <p className="mb-1 flex items-center gap-2 text-sm font-semibold text-neutral-900">
+                <span className="flex size-5 items-center justify-center rounded-full bg-neutral-900 text-[11px] text-white">
                   {i + 1}
                 </span>
                 {t}
               </p>
-              <p className="text-[13px] leading-relaxed text-slate-600">{d}</p>
+              <p className="text-[13px] leading-relaxed text-neutral-600">{d}</p>
             </li>
           ))}
         </ol>
 
-        <div className="space-y-2 text-[13px] text-slate-600">
-          <p className="font-semibold text-slate-800">Reading the tree</p>
+        <div className="space-y-2 text-[13px] text-neutral-600">
+          <p className="font-semibold text-neutral-800">Reading the tree</p>
           <ul className="space-y-1.5">
-            <li>• <b className="text-indigo-700">Blue boxes</b> are ideas; <b className="text-rose-600">red boxes</b> are experiments; <b className="text-sky-600">dashed boxes</b> are AI suggestions waiting for you.</li>
+            <li>• <b className="text-neutral-900">Blue boxes</b> are ideas; <b className="text-rose-600">red boxes</b> are experiments; <b className="text-neutral-900">dashed boxes</b> are AI suggestions waiting for you.</li>
             <li>• Thicker lines mean the AI is more confident about that link.</li>
             <li>• Click any box for details. &ldquo;Discuss with AI&rdquo; opens that box&rsquo;s own assistant.</li>
             <li>• Scroll to zoom, drag the background to move around. Press Esc to close panels.</li>
           </ul>
-          <p className="pt-1 text-slate-500">
+          <p className="pt-1 text-neutral-500">
             Literature searching is connected to the <b>Semantic Scholar API</b>. Reasoning, hypothesis decomposition, and result interpretation are powered by <b>Claude Sonnet 5.5</b>.
           </p>
         </div>
 
-        <div className="flex items-center justify-end border-t border-slate-100 pt-4">
-          <button onClick={onClose} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">
+        <div className="flex items-center justify-end border-t border-neutral-100 pt-4">
+          <button onClick={onClose} className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800">
             Got it
           </button>
         </div>

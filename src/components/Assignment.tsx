@@ -88,7 +88,7 @@ export function AssignmentSection({ node }: { node: TreeNode }) {
   return (
     <div className="space-y-3 rounded-xl border border-neutral-200 bg-neutral-50/60 p-3.5">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
+        <h3 className="text-[13px] font-medium text-neutral-500">
           Who&rsquo;s working on this
         </h3>
         {canEdit && (
@@ -159,7 +159,7 @@ export function AssignmentSection({ node }: { node: TreeNode }) {
 
       <div className="space-y-2 border-t border-neutral-200 pt-3">
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
+          <h3 className="text-[13px] font-medium text-neutral-500">
             Progress
           </h3>
           {!canEdit && <StagePill stage={stage} />}

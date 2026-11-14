@@ -7,11 +7,11 @@ import type { Status } from "@/lib/types";
 const styles: Record<Status, { label: string; className: string; icon?: React.ReactNode }> = {
   untested: {
     label: "Untested",
-    className: "bg-slate-50 text-slate-500 border-slate-200",
+    className: "bg-neutral-50 text-neutral-500 border-neutral-200",
   },
   planned: {
     label: "Planned",
-    className: "bg-slate-50 text-slate-600 border-slate-300",
+    className: "bg-neutral-50 text-neutral-600 border-neutral-300",
   },
   supported: {
     label: "Supported",
