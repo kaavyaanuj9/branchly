@@ -70,11 +70,14 @@ export async function searchSemanticScholar(
     headers["x-api-key"] = apiKey;
   }
 
-  const res = await fetch(url, {
-    method: "GET",
-    headers,
-    cache: "no-store",
-  });
+  // A key allows 1 request/second shared across everything using it (e.g. the Research Tree
+  // build), so a 429 is often momentary: retry a few times with growing pauses.
+  let res = await fetch(url, { method: "GET", headers, cache: "no-store" });
+  for (const waitMs of [1500, 3000, 6000]) {
+    if (res.status !== 429) break;
+    await new Promise((r) => setTimeout(r, waitMs));
+    res = await fetch(url, { method: "GET", headers, cache: "no-store" });
+  }
 
   if (!res.ok) {
     let errorMsg = `Semantic Scholar API request failed (${res.status} ${res.statusText})`;
