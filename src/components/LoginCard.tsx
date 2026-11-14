@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import { ArrowRight } from "lucide-react";
 import { GoogleSignInButton } from "@/app/login/GoogleSignInButton";
@@ -14,6 +14,16 @@ const EASE = [0.22, 1, 0.36, 1] as const;
 
 export function LoginCard({ next }: { next: string }) {
   const [started, setStarted] = useState(false);
+  // the branches dissolve around whatever is in the middle: measure it
+  const middle = useRef<HTMLDivElement>(null);
+  const [hole, setHole] = useState({ rx: 420, ry: 140 });
+  useEffect(() => {
+    const el = middle.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setHole({ rx: el.offsetWidth / 2 + 24, ry: el.offsetHeight / 2 + 24 }));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   useEffect(() => {
     if (started) return;
     const onKey = (e: KeyboardEvent) => e.key === "Enter" && setStarted(true);
@@ -23,13 +33,12 @@ export function LoginCard({ next }: { next: string }) {
 
   return (
     <main className="relative min-h-dvh overflow-hidden bg-[#f7f7f6] text-neutral-900">
-      <BranchField hole={{ rx: 215, ry: 250 }} />
+      <BranchField hole={hole} />
 
       <LayoutGroup>
         <div className="relative z-10 flex min-h-dvh flex-col items-center justify-center px-4">
+          <div ref={middle} className="flex flex-col items-center">
           <motion.div layout transition={{ layout: { duration: 0.9, ease: EASE } }} className="relative flex flex-col items-center text-center">
-            {/* a soft paper-coloured halo so branches pass under the words */}
-            <span className="absolute -inset-x-14 -inset-y-8 -z-10 rounded-full bg-[#f7f7f6] blur-2xl" />
             <motion.div
               layout
               initial={{ opacity: 0, scale: 0.96, filter: "blur(8px)" }}
@@ -79,7 +88,7 @@ export function LoginCard({ next }: { next: string }) {
                 initial={{ opacity: 0, y: 40, scale: 0.97 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 transition={{ duration: 0.8, delay: 0.2, ease: EASE }}
-                className="mt-8 w-full max-w-[360px] space-y-4 rounded-2xl border border-black/10 bg-white/55 p-6 text-left shadow-[0_8px_40px_rgba(0,0,0,0.06)] backdrop-blur-xl"
+                className="mt-8 w-[min(360px,calc(100vw-32px))] space-y-4 rounded-2xl border border-black/10 bg-white/55 p-6 text-left shadow-[0_8px_40px_rgba(0,0,0,0.06)] backdrop-blur-xl"
               >
                 <div>
                   <p className="text-[15px] font-semibold">Create your profile</p>
@@ -91,6 +100,7 @@ export function LoginCard({ next }: { next: string }) {
               </motion.div>
             )}
           </AnimatePresence>
+          </div>
         </div>
       </LayoutGroup>
     </main>
