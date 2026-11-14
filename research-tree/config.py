@@ -37,6 +37,18 @@ _legacy = ROOT / "data" / "tree.db"
 DATA = ROOT / "data" if FIELD.SLUG == "llm_agents" and _legacy.exists() else ROOT / "data" / FIELD.SLUG
 if os.environ.get("RT_DATA"):          # explicit data folder (deployments, tests)
     DATA = Path(os.environ["RT_DATA"])
+# First run on a fresh clone: start from the snapshot shipped in seed/<field>/ (the map's papers,
+# topic model and embeddings), so the field map works without rebuilding it. The live map then
+# grows in data/ (git-ignored) as new preprints arrive.
+_SEED = ROOT / "seed" / FIELD.SLUG
+if not (DATA / "tree.db").exists() and (_SEED / "tree.db").exists():
+    import shutil
+    DATA.mkdir(parents=True, exist_ok=True)
+    for _f in _SEED.iterdir():
+        if _f.is_file() and not (DATA / _f.name).exists():
+            shutil.copy2(_f, DATA / _f.name)
+    print(f"Field map: started from the seed snapshot in {_SEED}", flush=True)
+
 DB_PATH = DATA / "tree.db"
 MODEL_PATH = DATA / "model.pkl"
 

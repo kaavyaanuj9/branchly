@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { findNode } from "@/lib/tree";
+import { keywordQuery } from "@/lib/keywords";
 import type { Evidence, SemanticScholarPaper } from "@/lib/types";
 import { formatCitation } from "@/lib/semanticScholar";
 
@@ -28,13 +29,7 @@ export function PaperSearchModal({
   const targetNode = findNode(state.nodes, nodeId || state.selectedId || "root");
 
   // Generate an initial query from the node title (removing stopwords / punctuation)
-  const initialQuery = targetNode
-    ? targetNode.title
-        .replace(/[^\w\s-]/g, "")
-        .split(/\s+/)
-        .slice(0, 7)
-        .join(" ")
-    : "Venetoclax BCL-2";
+  const initialQuery = targetNode ? keywordQuery(targetNode.title) : "Venetoclax BCL-2";
 
   const [query, setQuery] = useState(initialQuery);
   const [loading, setLoading] = useState(true);
@@ -177,40 +172,40 @@ export function PaperSearchModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-[2px]"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/40 p-4 backdrop-blur-[2px]"
       onMouseDown={onClose}
     >
       <div
         onMouseDown={(e) => e.stopPropagation()}
-        className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/10"
+        className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-neutral-900/10"
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+        <div className="flex items-center justify-between border-b border-neutral-100 px-6 py-4">
           <div className="flex items-center gap-2.5">
-            <span className="flex size-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-700">
+            <span className="flex size-8 items-center justify-center rounded-lg bg-neutral-100 text-neutral-900">
               <BookOpen className="size-4.5" />
             </span>
             <div>
-              <h2 className="text-[15px] font-semibold text-slate-900">
+              <h2 className="text-[15px] font-semibold text-neutral-900">
                 Semantic Scholar Literature Search
               </h2>
               {targetNode && (
-                <p className="line-clamp-1 text-xs text-slate-500">
-                  Target: <span className="font-medium text-slate-700">{targetNode.title}</span>
+                <p className="line-clamp-1 text-xs text-neutral-500">
+                  Target: <span className="font-medium text-neutral-700">{targetNode.title}</span>
                 </p>
               )}
             </div>
           </div>
           <button
             onClick={onClose}
-            className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            className="rounded-md p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
           >
             <X className="size-4.5" />
           </button>
         </div>
 
         {/* Search bar */}
-        <div className="border-b border-slate-100 bg-slate-50/70 px-6 py-3.5">
+        <div className="border-b border-neutral-100 bg-neutral-50/70 px-6 py-3.5">
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -219,19 +214,19 @@ export function PaperSearchModal({
             className="flex gap-2"
           >
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-2.5 size-4 text-slate-400" />
+              <Search className="absolute left-3 top-2.5 size-4 text-neutral-400" />
               <input
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search research papers on Semantic Scholar…"
-                className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-800 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                className="w-full rounded-lg border border-neutral-200 bg-white py-2 pl-9 pr-3 text-sm text-neutral-800 outline-none transition focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100"
               />
             </div>
             <button
               type="submit"
               disabled={loading || !query.trim()}
-              className="flex items-center gap-1.5 rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-800 disabled:bg-slate-300"
+              className="flex items-center gap-1.5 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-neutral-900 disabled:bg-neutral-300"
             >
               {loading ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-4" />}
               Search
@@ -254,16 +249,16 @@ export function PaperSearchModal({
           )}
 
           {loading && (
-            <div className="flex flex-col items-center justify-center py-16 text-slate-400">
-              <Loader2 className="mb-2 size-8 animate-spin text-indigo-600" />
+            <div className="flex flex-col items-center justify-center py-16 text-neutral-400">
+              <Loader2 className="mb-2 size-8 animate-spin text-neutral-900" />
               <p className="text-sm font-medium">Querying Semantic Scholar Academic Graph…</p>
             </div>
           )}
 
           {!loading && !error && papers.length === 0 && (
-            <div className="py-12 text-center text-slate-500">
+            <div className="py-12 text-center text-neutral-500">
               <p className="text-sm font-medium">No papers found for this query.</p>
-              <p className="mt-1 text-xs text-slate-400">
+              <p className="mt-1 text-xs text-neutral-400">
                 Try searching for specific genes, disease subtypes, or drug mechanisms.
               </p>
             </div>
@@ -279,30 +274,30 @@ export function PaperSearchModal({
               return (
                 <div
                   key={p.paperId}
-                  className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300"
+                  className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm transition hover:border-neutral-300"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="space-y-1">
-                      <h3 className="text-[14.5px] font-semibold leading-snug text-slate-900">
+                      <h3 className="text-[14.5px] font-semibold leading-snug text-neutral-900">
                         {p.url ? (
                           <a
                             href={p.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 hover:text-indigo-700 hover:underline"
+                            className="inline-flex items-center gap-1 hover:text-neutral-900 hover:underline"
                           >
                             {p.title}
-                            <ExternalLink className="size-3 text-slate-400" />
+                            <ExternalLink className="size-3 text-neutral-400" />
                           </a>
                         ) : (
                           p.title
                         )}
                       </h3>
-                      <p className="text-xs text-slate-500">{citation}</p>
+                      <p className="text-xs text-neutral-500">{citation}</p>
                     </div>
 
                     {p.citationCount !== undefined && p.citationCount !== null && (
-                      <span className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-medium text-slate-600">
+                      <span className="shrink-0 rounded-full border border-neutral-200 bg-neutral-50 px-2.5 py-0.5 text-[11px] font-medium text-neutral-600">
                         {p.citationCount} {p.citationCount === 1 ? "citation" : "citations"}
                       </span>
                     )}
@@ -310,23 +305,23 @@ export function PaperSearchModal({
 
                   {/* TLDR */}
                   {p.tldr?.text && (
-                    <div className="mt-2.5 rounded-lg border border-indigo-100 bg-indigo-50/40 px-3 py-2 text-[12.5px] leading-relaxed text-slate-700">
-                      <span className="font-semibold text-indigo-700">TLDR: </span>
+                    <div className="mt-2.5 rounded-lg border border-neutral-100 bg-neutral-100/40 px-3 py-2 text-[12.5px] leading-relaxed text-neutral-700">
+                      <span className="font-semibold text-neutral-900">TLDR: </span>
                       {p.tldr.text}
                     </div>
                   )}
 
                   {/* Abstract */}
                   {p.abstract && !p.tldr?.text && (
-                    <p className="mt-2 line-clamp-3 text-[13px] leading-relaxed text-slate-600">
+                    <p className="mt-2 line-clamp-3 text-[13px] leading-relaxed text-neutral-600">
                       {p.abstract}
                     </p>
                   )}
 
                   {/* Claude Analysis Output */}
                   {analysis && (
-                    <div className="mt-3 space-y-2 rounded-xl border border-purple-200 bg-purple-50/50 p-3.5 text-xs text-slate-800">
-                      <div className="flex items-center gap-1.5 font-semibold text-purple-800">
+                    <div className="mt-3 space-y-2 rounded-xl border border-neutral-300 bg-neutral-100/50 p-3.5 text-xs text-neutral-800">
+                      <div className="flex items-center gap-1.5 font-semibold text-neutral-900">
                         <Sparkles className="size-3.5" />
                         Claude Sonnet 5.5 Relevance Assessment:
                         {analysis.supportsHypothesis === true && (
@@ -340,15 +335,15 @@ export function PaperSearchModal({
                           </span>
                         )}
                       </div>
-                      <p className="leading-relaxed text-slate-700">{analysis.summary}</p>
-                      <div className="border-t border-purple-200/60 pt-2">
-                        <span className="font-medium text-purple-900">Recommended Evidence Extract: </span>
-                        <span className="italic text-slate-700">&ldquo;{analysis.evidenceExtract}&rdquo;</span>
+                      <p className="leading-relaxed text-neutral-700">{analysis.summary}</p>
+                      <div className="border-t border-neutral-300/60 pt-2">
+                        <span className="font-medium text-neutral-900">Recommended Evidence Extract: </span>
+                        <span className="italic text-neutral-700">&ldquo;{analysis.evidenceExtract}&rdquo;</span>
                       </div>
                       <button
                         onClick={() => addPaperToEvidence(p, analysis.evidenceExtract)}
                         disabled={isAdded}
-                        className="mt-1 flex items-center gap-1 rounded-md bg-purple-700 px-2.5 py-1 text-[11.5px] font-semibold text-white hover:bg-purple-800 disabled:bg-slate-300"
+                        className="mt-1 flex items-center gap-1 rounded-md bg-neutral-900 px-2.5 py-1 text-[11.5px] font-semibold text-white hover:bg-neutral-900 disabled:bg-neutral-300"
                       >
                         <Check className="size-3" />
                         {isAdded ? "Added to Evidence" : "Save Extracted Evidence to Node"}
@@ -357,14 +352,14 @@ export function PaperSearchModal({
                   )}
 
                   {/* Actions */}
-                  <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2.5">
+                  <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-neutral-100 pt-2.5">
                     <button
                       onClick={() => addPaperToEvidence(p)}
                       disabled={isAdded || !targetNode}
                       className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                         isAdded
                           ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
-                          : "bg-slate-900 text-white hover:bg-slate-800"
+                          : "bg-neutral-900 text-white hover:bg-neutral-800"
                       }`}
                     >
                       {isAdded ? <Check className="size-3.5" /> : <Plus className="size-3.5" />}
@@ -374,7 +369,7 @@ export function PaperSearchModal({
                     <button
                       onClick={() => analyzeWithClaude(p)}
                       disabled={isAnalyzing || !targetNode}
-                      className="inline-flex items-center gap-1 rounded-lg border border-purple-200 bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-700 transition hover:bg-purple-100 disabled:opacity-50"
+                      className="inline-flex items-center gap-1 rounded-lg border border-neutral-300 bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-900 transition hover:bg-neutral-100 disabled:opacity-50"
                     >
                       {isAnalyzing ? (
                         <Loader2 className="size-3.5 animate-spin" />

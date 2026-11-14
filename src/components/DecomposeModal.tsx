@@ -107,31 +107,31 @@ export function DecomposeModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-[2px]"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/40 p-4 backdrop-blur-[2px]"
       onMouseDown={onClose}
     >
       <div
         onMouseDown={(e) => e.stopPropagation()}
-        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/10"
+        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-neutral-900/10"
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+        <div className="flex items-center justify-between border-b border-neutral-100 px-6 py-4">
           <div className="flex items-center gap-2.5">
-            <span className="flex size-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-700">
+            <span className="flex size-8 items-center justify-center rounded-lg bg-neutral-100 text-neutral-900">
               <Sparkles className="size-4.5" />
             </span>
             <div>
-              <h2 className="text-[15px] font-semibold text-slate-900">
+              <h2 className="text-[15px] font-semibold text-neutral-900">
                 Break Down with Claude Sonnet 5.5
               </h2>
-              <p className="line-clamp-1 text-xs text-slate-500">
-                Target: <span className="font-medium text-slate-700">{node.title}</span>
+              <p className="line-clamp-1 text-xs text-neutral-500">
+                Target: <span className="font-medium text-neutral-700">{node.title}</span>
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            className="rounded-md p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
           >
             <X className="size-4.5" />
           </button>
@@ -140,8 +140,8 @@ export function DecomposeModal({
         {/* Body */}
         <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
           {loading && (
-            <div className="flex flex-col items-center justify-center py-16 text-slate-400">
-              <Loader2 className="mb-2 size-8 animate-spin text-indigo-600" />
+            <div className="flex flex-col items-center justify-center py-16 text-neutral-400">
+              <Loader2 className="mb-2 size-8 animate-spin text-neutral-900" />
               <p className="text-sm font-medium">
                 Claude Sonnet 5.5 is formulating testable sub-claims and experiments…
               </p>
@@ -161,7 +161,7 @@ export function DecomposeModal({
           )}
 
           {!loading && !error && candidates.length === 0 && (
-            <div className="py-12 text-center text-slate-500">
+            <div className="py-12 text-center text-neutral-500">
               <p className="text-sm">No suggestions were generated.</p>
             </div>
           )}
@@ -184,50 +184,44 @@ export function DecomposeModal({
                   }}
                   className={`cursor-pointer rounded-xl border p-4 transition ${
                     isSelected
-                      ? isExp
-                        ? "border-rose-400 bg-rose-50/40 shadow-sm"
-                        : "border-indigo-400 bg-indigo-50/40 shadow-sm"
-                      : "border-slate-200 bg-white hover:border-slate-300"
+                      ? "border-neutral-900 bg-white shadow-[0_0_0_1px_#171717]"
+                      : "border-neutral-200 bg-white hover:border-neutral-400"
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-2">
                       <span
-                        className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                          isExp
-                            ? "bg-rose-100 text-rose-700"
-                            : "bg-indigo-100 text-indigo-700"
-                        }`}
+                        className="flex items-center gap-1 rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-medium text-neutral-700"
                       >
                         {isExp ? <FlaskConical className="size-3" /> : <GitBranch className="size-3" />}
                         {isExp ? "Experiment" : "Sub-hypothesis"}
                       </span>
                       {c.lens && (
-                        <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                        <span className="rounded-md bg-neutral-100 px-2 py-0.5 text-[11px] font-medium text-neutral-600">
                           {c.lens}
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                    <div className="flex items-center gap-1.5 text-xs text-neutral-500">
                       <span>Confidence</span>
-                      <span className="font-semibold text-slate-800">
+                      <span className="font-semibold text-neutral-800">
                         {Math.round(c.confidence * 100)}%
                       </span>
                       <input
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => {}}
-                        className="ml-2 size-4 rounded text-indigo-600"
+                        className="ml-2 size-4 rounded text-neutral-900"
                       />
                     </div>
                   </div>
 
-                  <p className="mt-2 text-sm font-semibold text-slate-900">{c.title}</p>
-                  <p className="mt-1 text-xs leading-relaxed text-slate-600">{c.rationale}</p>
+                  <p className="mt-2 text-sm font-semibold text-neutral-900">{c.title}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-neutral-600">{c.rationale}</p>
 
                   {isExp && c.goal && (
-                    <div className="mt-2.5 rounded-lg border border-slate-100 bg-white/70 p-2 text-xs text-slate-700">
-                      <span className="font-medium text-slate-800">Goal: </span>
+                    <div className="mt-2.5 rounded-lg border border-neutral-100 bg-white/70 p-2 text-xs text-neutral-700">
+                      <span className="font-medium text-neutral-800">Goal: </span>
                       {c.goal}
                     </div>
                   )}
@@ -237,21 +231,21 @@ export function DecomposeModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between border-t border-slate-100 px-6 py-4">
-          <p className="text-xs text-slate-500">
+        <div className="flex items-center justify-between border-t border-neutral-100 px-6 py-4">
+          <p className="text-xs text-neutral-500">
             {selectedIndices.size} of {candidates.length} branches selected
           </p>
           <div className="flex gap-2">
             <button
               onClick={onClose}
-              className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+              className="rounded-lg px-4 py-2 text-sm font-medium text-neutral-600 hover:bg-neutral-100"
             >
               Cancel
             </button>
             <button
               onClick={addSelected}
               disabled={selectedIndices.size === 0}
-              className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300"
+              className="flex items-center gap-1.5 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 disabled:bg-neutral-300"
             >
               <Check className="size-4" /> Add Selected to Tree
             </button>

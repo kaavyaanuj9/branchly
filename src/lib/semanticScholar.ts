@@ -1,4 +1,5 @@
 import type { SemanticScholarPaper } from "./types";
+import { keywordQuery } from "./keywords";
 
 const S2_API_URL = "https://api.semanticscholar.org/graph/v1/paper/search";
 
@@ -47,6 +48,20 @@ export async function searchSemanticScholar(
   query: string,
   limit = 8,
 ): Promise<{ papers: SemanticScholarPaper[]; total: number }> {
+  // Search engines match terms, not meaning: a whole sentence often finds nothing. If so, retry
+  // with its key terms, then with fewer of them.
+  const first = await searchOnce(query, limit);
+  if (first.papers.length || query.trim().split(/\s+/).length <= 3) return first;
+  for (const max of [5, 3]) {
+    const shorter = keywordQuery(query, max);
+    if (!shorter || shorter.toLowerCase() === query.trim().toLowerCase()) continue;
+    const r = await searchOnce(shorter, limit);
+    if (r.papers.length) return r;
+  }
+  return first;
+}
+
+async function searchOnce(query: string, limit: number): Promise<{ papers: SemanticScholarPaper[]; total: number }> {
   const cleanQuery = query.trim();
   if (!cleanQuery) throw new Error("Search query cannot be empty.");
 

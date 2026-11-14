@@ -112,6 +112,8 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## 🌳 Research Tree: the field around your hypothesis
 
+**It works out of the box.** `npm run dev:all` starts the website and the field map together. On the first run it sets up the field map's Python environment, copies the shipped snapshot of the map (`research-tree/seed/cell_death/`: 2,256 cancer cell-death papers, topic model, embeddings) into `research-tree/data/`, and downloads two small search models (~250 MB, once). From then on the map keeps growing locally as new bioRxiv preprints arrive.
+
 Branchly is project scale: one team testing one idea. **Research Tree** (`research-tree/`) is field
 scale: a live map of what every lab is publishing, who builds on whom, and which directions are
 crowded or open. It runs as its own service, and Branchly uses it as its literature layer.

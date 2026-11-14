@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X } from "lucide-react";
+import { X , ListChecks } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { activeSubHypotheses, experimentProgress, stageOf, treeProgress } from "@/lib/progress";
 import { findNode } from "@/lib/tree";
@@ -40,10 +40,10 @@ export function ProgressPanel({ onClose }: { onClose: () => void }) {
   const mineCount = all.filter((n) => n.assignees?.includes(uid)).length;
 
   return (
-    <aside className="flex h-full w-[380px] shrink-0 flex-col border-l border-neutral-200 bg-white xl:w-[420px]">
-      <div className="flex items-center justify-between border-b border-neutral-100 px-5 py-3.5">
-        <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-900">
-          Team progress
+    <aside className="flex h-full w-[340px] shrink-0 flex-col border-l border-neutral-200 bg-white xl:w-[360px]">
+      <div className="flex items-center justify-between px-6 pt-5">
+        <span className="flex items-center gap-1.5 text-[12.5px] font-medium text-neutral-500">
+          <ListChecks className="size-3.5" /> Team progress
         </span>
         <button
           onClick={onClose}
@@ -54,8 +54,8 @@ export function ProgressPanel({ onClose }: { onClose: () => void }) {
         </button>
       </div>
 
-      <div className="space-y-3 border-b border-neutral-100 px-5 py-4">
-        <p className="text-sm text-neutral-700">
+      <div className="space-y-3 border-b border-neutral-100 px-6 pb-5 pt-3">
+        <p className="text-[21px] font-semibold leading-tight tracking-[-0.01em] text-neutral-950">
           <b className="tabular-nums">{summary.done}</b> of{" "}
           <b className="tabular-nums">{summary.total}</b> sub-hypotheses done
         </p>

@@ -4,6 +4,15 @@ import { useState } from "react";
 import { GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
 import { getClientAuth } from "@/lib/firebase/client";
 
+// Firebase's error codes, in words people can act on.
+const FRIENDLY: Record<string, string> = {
+  "auth/popup-blocked":
+    "Your browser blocked the Google sign-in window. Allow pop-ups for this site (the icon at the right of the address bar), or open the page in Chrome or Safari.",
+  "auth/network-request-failed": "Couldn't reach Google. Check your connection and try again.",
+  "auth/unauthorized-domain": "This address isn't allowed to sign in yet. Add it under Firebase › Authentication › Settings › Authorized domains.",
+  "auth/operation-not-allowed": "Google sign-in isn't switched on for this Firebase project (Authentication › Sign-in method › Google).",
+};
+
 export function GoogleSignInButton({ next }: { next: string }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +40,7 @@ export function GoogleSignInButton({ next }: { next: string }) {
     } catch (e) {
       const code = (e as { code?: string }).code;
       if (code !== "auth/popup-closed-by-user" && code !== "auth/cancelled-popup-request") {
-        setError(e instanceof Error ? e.message : "Sign-in failed");
+        setError(FRIENDLY[code ?? ""] ?? (e instanceof Error ? e.message : "Sign-in failed"));
       }
       setLoading(false);
     }
@@ -47,7 +56,7 @@ export function GoogleSignInButton({ next }: { next: string }) {
         <GoogleLogo />
         {loading ? "Signing in…" : "Continue with Google"}
       </button>
-      {error && <p className="mt-3 text-center text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-3 text-center text-[12.5px] leading-relaxed text-rose-700">{error}</p>}
     </>
   );
 }
