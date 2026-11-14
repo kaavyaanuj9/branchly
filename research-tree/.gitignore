@@ -1,7 +1,7 @@
 data/
 data-*/
 backups/
-.venv/
+.venv
 __pycache__/
 *.pyc
 .env
