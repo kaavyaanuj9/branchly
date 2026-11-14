@@ -14,6 +14,7 @@ import {
 import { fieldQuery } from "@/lib/fieldQuery";
 import { useStore } from "@/lib/store";
 import type { Evidence, TreeNode } from "@/lib/types";
+import { useFieldNav } from "./fieldNav";
 import { useUI } from "./uiContext";
 
 // "Field" panel: the team's box seen against the whole field, from Research Tree (the
@@ -35,6 +36,10 @@ export interface FieldPaper {
   built_on?: number;
   evidence?: Record<string, string>;
   strength?: "strong" | "possible" | "below";
+  node?: string;
+  branch?: string;
+  source?: string;
+  first_seen?: number;
 }
 
 type Tab = "where" | "tested" | "read" | "watch";
@@ -148,6 +153,7 @@ function Status({ loading, error, note }: { loading: boolean; error: string | nu
 /** One paper; "+ Evidence" adds it to `node` (the selected project box), if there is one. */
 export function PaperRow({ paper, node, extra }: { paper: FieldPaper; node?: TreeNode; extra?: React.ReactNode }) {
   const { dispatch } = useStore();
+  const nav = useFieldNav();
   const added = !!node?.evidence.some((e) => e.url === paper.url || e.paperId === paper.id);
   return (
     <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-2.5 text-[12.5px] leading-snug">
@@ -178,6 +184,20 @@ export function PaperRow({ paper, node, extra }: { paper: FieldPaper; node?: Tre
       <p className="mt-1 text-[11.5px] text-slate-500">
         {citationOf(paper)}
         {paper.reason ? ` · ${paper.reason}` : ""}
+        {paper.built_on !== undefined && (
+          <span title="How many papers on the field map cite this one. 0 is neutral: new, overlooked, or a hidden gem.">
+            {" · "}
+            {paper.built_on ? `built on by ${paper.built_on}` : "not built on yet"}
+          </span>
+        )}
+        {nav && (
+          <>
+            {" · "}
+            <button onClick={() => nav.openPaper(paper.id)} className="text-emerald-700 hover:underline">
+              lineage
+            </button>
+          </>
+        )}
       </p>
       {extra}
     </div>
@@ -247,13 +267,25 @@ interface AspectsResult {
   combos: { parts: string[]; count: number; strong: number; papers: FieldPaper[]; closest: FieldPaper[] }[];
 }
 
-function TestedCheck({ node, parent }: { node: TreeNode; parent?: TreeNode }) {
-  const isExp = node.kind === "experiment";
+export function TestedCheck({
+  node,
+  parent,
+  initial,
+  target,
+}: {
+  node?: TreeNode;
+  parent?: TreeNode;
+  initial?: { problem?: string; method?: string; setting?: string };
+  /** the box "+ Evidence" adds to (defaults to node) */
+  target?: TreeNode;
+}) {
+  const isExp = node?.kind === "experiment";
   const [parts, setParts] = useState({
-    problem: isExp ? parent?.title || "" : node.title,
-    method: isExp ? [node.title, node.goal].filter(Boolean).join(": ") : "",
-    setting: "",
+    problem: initial?.problem ?? (node ? (isExp ? parent?.title || "" : node.title) : ""),
+    method: initial?.method ?? (node && isExp ? [node.title, node.goal].filter(Boolean).join(": ") : ""),
+    setting: initial?.setting ?? "",
   });
+  const evidenceBox = target ?? node;
   const [ran, setRan] = useState(false);
   const load = useCallback(
     () =>
@@ -275,7 +307,11 @@ function TestedCheck({ node, parent }: { node: TreeNode; parent?: TreeNode }) {
             value={parts[k]}
             onChange={(e) => setParts({ ...parts, [k]: e.target.value })}
             placeholder={
-              k === "setting" ? "model system, e.g. primary CLL cells, PDX mice" : k === "method" ? "e.g. CRISPR knockout of BCL2" : ""
+              k === "setting"
+                ? "model system, e.g. primary CLL cells, PDX mice"
+                : k === "method"
+                  ? "e.g. CRISPR knockout of BCL2"
+                  : "e.g. venetoclax resistance in AML"
             }
             className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[12.5px] font-normal normal-case tracking-normal text-slate-800 focus:border-emerald-400 focus:outline-none"
           />
@@ -302,7 +338,7 @@ function TestedCheck({ node, parent }: { node: TreeNode; parent?: TreeNode }) {
             <PaperRow
               key={p.id}
               paper={p}
-              node={node}
+              node={evidenceBox}
               extra={
                 p.evidence && (
                   <div className="mt-1.5 space-y-1">
@@ -335,13 +371,14 @@ const SECTION_TITLE: Record<string, string> = {
   newest: "Newest in this neighbourhood",
 };
 
-function ReadingList({ node }: { node: TreeNode }) {
+export function ReadingList({ node, query }: { node?: TreeNode; query?: string }) {
+  const q = query ?? node?.title ?? "";
   const load = useCallback(
     () =>
       getJSON<{ order: string[]; sections: Record<string, FieldPaper[]>; classics: FieldPaper[] }>(
-        `/api/field/reading?q=${encodeURIComponent(node.title)}`,
+        `/api/field/reading?q=${encodeURIComponent(q)}`,
       ),
-    [node.title],
+    [q],
   );
   const { data, error, loading } = useLoad(load);
   return (

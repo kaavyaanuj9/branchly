@@ -50,7 +50,7 @@ async function call<T>(path: string, init?: RequestInit, timeoutMs = 60_000): Pr
   } catch {
     throw new ResearchTreeUnavailable(
       `Research Tree is not reachable at ${BASE}. Start it with: ` +
-        "cd research-tree && RT_FIELD=cancer_cell_bio python3 server.py",
+        "npm run dev:all (or: cd research-tree && RT_FIELD=cell_death python3 server.py)",
     );
   }
   const body = await res.json().catch(() => ({}));
@@ -61,7 +61,7 @@ async function call<T>(path: string, init?: RequestInit, timeoutMs = 60_000): Pr
 export const fieldUrl = (q?: string) => (q ? `${BASE}/?q=${encodeURIComponent(q)}` : BASE);
 
 export function status() {
-  return call<{ field: string; coverage: string; papers: number }>("/api/status");
+  return call<{ field: string; coverage: string; papers: number; last_poll?: number; continuous?: boolean; aspect_examples?: Record<string, string> }>("/api/status");
 }
 
 export interface FieldTreeNode {
@@ -101,12 +101,45 @@ export function aspects(parts: { problem?: string; method?: string; setting?: st
   return call<AspectsResult>(`/api/aspects?${q}`, undefined, 180_000);
 }
 
-export function createWatch(query: string) {
+/** An alert for an idea (text) or a topic (node id) on the field map. */
+export function createWatch(spec: { query?: string; node?: string; label?: string }) {
+  const body = spec.node ? { kind: "topic", node: spec.node, label: spec.label } : { kind: "idea", query: spec.query, label: spec.label };
   return call<{ token: string; feed: string; view: string }>("/api/watch", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ kind: "idea", query }),
+    body: JSON.stringify(body),
   }, 120_000);
+}
+
+export function stopWatch(token: string) {
+  return call<{ ok: boolean }>(`/api/watch/${encodeURIComponent(token)}/stop`, { method: "POST" });
+}
+
+/** Tell the field what you are doing on a topic: claim / promising / dead_end / note / done. */
+export function signal(node: string, body: { kind: string; who?: string; text?: string; visibility?: string; actor?: string }) {
+  return call<{ ok: boolean }>(`/api/node/${encodeURIComponent(node)}/signal`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+/** Citation lineage around a branch/topic, or around one paper. Edges {s, t}: s cites t. */
+export function lineage(kind: "node" | "paper", id: string) {
+  return call<Record<string, unknown>>(`/api/lineage/${kind}/${encodeURIComponent(id)}`, undefined, 90_000);
+}
+
+export function paper(id: string) {
+  return call<Record<string, unknown>>(`/api/paper/${encodeURIComponent(id)}`);
+}
+
+/** The live event stream (new papers, signals, rebuilds), passed through as-is. */
+export async function events(signal: AbortSignal): Promise<Response> {
+  try {
+    return await fetch(BASE + "/api/events", { signal, cache: "no-store" });
+  } catch {
+    throw new ResearchTreeUnavailable(`Research Tree is not reachable at ${BASE}.`);
+  }
 }
 
 export function viewWatch(token: string) {
