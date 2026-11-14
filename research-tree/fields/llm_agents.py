@@ -8,6 +8,8 @@ import re
 
 NAME = "LLM Agents"
 SLUG = "llm_agents"
+# examples shown in the problem / method / setting check
+ASPECT_EXAMPLES = {"problem": "credit assignment in long multi-turn tasks", "method": "RL with step-level rewards", "setting": "web shopping (WebShop), ALFWorld"}
 SOURCE = "arxiv"
 COVERAGE = "LLM-agent papers on arXiv since Oct 2022"
 DEFAULT_PORT = 8765

@@ -23,6 +23,7 @@ def _load_env_file(path):
 _load_env_file(ROOT / ".env")
 from fields import FIELD  # noqa: E402  (after .env so RT_FIELD can come from it)
 
+ASPECT_EXAMPLES = getattr(FIELD, "ASPECT_EXAMPLES", {})
 FIELD_NAME = FIELD.NAME
 SOURCE = FIELD.SOURCE
 COVERAGE = FIELD.COVERAGE

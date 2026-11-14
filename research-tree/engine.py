@@ -939,4 +939,5 @@ class Engine:
                 "in_latest_announcement": len(latest), "hot_window": ingest.in_hot_window(),
                 "median_lag_s": lag[len(lag) // 2] if lag else None,
                 "built_at": self.store.get_meta("built_at"), "now": now,
-                "field": config.FIELD_NAME, "coverage": config.COVERAGE, "continuous": ingest.CONTINUOUS}
+                "field": config.FIELD_NAME, "coverage": config.COVERAGE, "continuous": ingest.CONTINUOUS,
+                "aspect_examples": config.ASPECT_EXAMPLES}

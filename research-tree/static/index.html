@@ -154,6 +154,7 @@ pre { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; 
     <input id="q" placeholder="Describe your idea — find where it sits on the tree and what's closest" autocomplete="off">
     <button class="btn primary">Locate</button>
   </form>
+  <button class="btn" id="combobtn" title="Has this problem + method + setting combination been studied?">Problem · method · setting</button>
 </header>
 <main>
   <div id="treewrap">
@@ -532,24 +533,14 @@ document.getElementById("locate").onsubmit = async e => {
       <button class="btn" id="alertbtn">Alert me about new papers like this</button>
       <button class="btn" data-id="${r.node}">Open this branch</button></div>
     ${alertBoxHTML("idea")}
-    <form class="sigform" id="aspform" style="margin-top:10px">
-      <div class="note">Name each part briefly. We check each part on its own, then whether any paper combines them.</div>
-      <input name="problem" placeholder="Problem, e.g. credit assignment in long multi-turn tasks">
-      <input name="method" placeholder="Method, e.g. RL with step-level rewards">
-      <input name="setting" placeholder="Setting, e.g. web shopping (WebShop), ALFWorld">
-      <div style="display:flex;gap:6px"><button class="btn primary">Check the combination</button></div>
-    </form>
+    ${aspectFormHTML("")}
     <h3>Closest papers on the tree</h3>
     ${r.nearest.map(p => paperHTML(p, true, true)).join("")}`;
   bindPanel();
   document.getElementById("readbtn").onclick = () => showReadingList(q);
   document.getElementById("aspbtn").onclick = () => document.getElementById("aspform").classList.toggle("open");
   bindAlertBox({ kind: "idea", query: q });
-  document.getElementById("aspform").onsubmit = ev => {
-    ev.preventDefault();
-    const f = ev.target;
-    showAspects({ problem: f.problem.value, method: f.method.value, setting: f.setting.value }, q);
-  };
+  bindAspectForm(q);
 };
 
 // ---------- alerts: watch an idea or a topic
@@ -615,6 +606,28 @@ async function showMyAlerts() {
 document.getElementById("myalerts").onclick = showMyAlerts;
 
 // ---------- aspects: is the combination new?
+function aspectFormHTML(cls) {
+  const ex = STATUS.aspect_examples || {};
+  return `<form class="sigform ${cls}" id="aspform" style="margin-top:10px">
+      <div class="note">Name each part briefly (any two or three). We check each part on its own, then whether any paper combines them.</div>
+      ${["problem", "method", "setting"].map(k => `<input name="${k}" placeholder="${k[0].toUpperCase() + k.slice(1)}${ex[k] ? ", e.g. " + esc(ex[k]) : ""}">`).join("")}
+      <div style="display:flex;gap:6px"><button class="btn primary">Check the combination</button></div>
+    </form>`;
+}
+function bindAspectForm(q) {
+  document.getElementById("aspform").onsubmit = ev => {
+    ev.preventDefault();
+    const f = ev.target, parts = { problem: f.problem.value, method: f.method.value, setting: f.setting.value };
+    if (Object.values(parts).filter(v => v.trim()).length < 2) { toast("Fill in at least two of the three parts"); return; }
+    showAspects(parts, q || Object.values(parts).filter(v => v.trim()).join("; "));
+  };
+}
+document.getElementById("combobtn").onclick = () => {
+  document.getElementById("panelbody").innerHTML =
+    `<h2>Has this combination been studied?</h2>${aspectFormHTML("open")}`;
+  bindAspectForm("");
+  document.querySelector("#aspform input").focus();
+};
 const ASPECT_COLORS = { problem: "#4c6ef5", method: "#e8590c", setting: "#0ca678" };
 function vennSVG(singles, combos) {
   // three overlapping circles labelled with counts (approximate: not area-proportional)

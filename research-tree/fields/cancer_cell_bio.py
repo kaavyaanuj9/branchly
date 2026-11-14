@@ -9,6 +9,8 @@ Papers are identified by lower-case DOI.
 """
 NAME = "Cancer & Cell Biology"
 SLUG = "cancer_cell_bio"
+# examples shown in the problem / method / setting check
+ASPECT_EXAMPLES = {"problem": "chemotherapy resistance in pancreatic cancer", "method": "single-cell RNA-seq lineage tracing", "setting": "patient-derived organoids"}
 SOURCE = "biorxiv"
 COVERAGE = "bioRxiv cancer biology, cell biology and pharmacology preprints since Nov 2024, plus the published papers they cite"
 DEFAULT_PORT = 8766

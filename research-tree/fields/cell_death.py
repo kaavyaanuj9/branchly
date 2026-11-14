@@ -12,6 +12,8 @@ from fields.cancer_cell_bio import (  # noqa: F401  (same sources, ids and links
 
 NAME = "Cancer Cell Death"
 SLUG = "cell_death"
+# examples shown in the problem / method / setting check
+ASPECT_EXAMPLES = {"problem": "venetoclax resistance in AML", "method": "CRISPR knockout of MCL1", "setting": "patient-derived xenografts"}
 SOURCE = "biorxiv"
 COVERAGE = ("bioRxiv cancer, cell biology and pharmacology preprints on regulated cell death since "
             "Nov 2024, plus the published papers they cite")
