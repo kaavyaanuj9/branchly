@@ -248,10 +248,11 @@ function ProjectSwitcher() {
           setProjects(listProjects());
           setOpen(!open);
         }}
-        title="Switch project"
-        className="flex min-w-0 items-center gap-1 rounded-md px-1.5 py-1 hover:bg-slate-100"
+        title={`${state.title}\n(click to switch project)`}
+        aria-label="Switch project"
+        className="flex min-w-0 max-w-full items-center gap-1 rounded-md px-1.5 py-1 hover:bg-neutral-100"
       >
-        <h1 className="truncate text-[14.5px] text-neutral-600">{state.title}</h1>
+        <h1 className="min-w-0 truncate text-[14.5px] text-neutral-600">{state.title}</h1>
         <ChevronsUpDown className="size-3.5 shrink-0 text-neutral-400" />
       </button>
       {open && (
