@@ -1,5 +1,6 @@
 import { complete, type LLMMessage } from "./llm";
-import { literatureContext } from "./researchTree";
+import { literatureContext, locate } from "./researchTree";
+import { formatCitation, searchSemanticScholar } from "./semanticScholar";
 
 /** Real papers from the field map, appended to a system prompt (empty if the map is down). */
 async function withLiterature(system: string, about: string): Promise<string> {
@@ -11,7 +12,7 @@ RELEVANT LITERATURE (the closest papers in the Research Tree field map; cite the
 use them, and say plainly when none of them addresses the question; never invent other citations):
 ${lit}`;
 }
-import type { Proposal, TreeNode } from "./types";
+import type { Evidence, Proposal, TreeNode } from "./types";
 
 /**
  * Extracts a structured Proposal object if Claude embedded one in a ```proposal block
@@ -421,4 +422,157 @@ Return ONLY a JSON object: {"reply": "...", "hypothesis": "...", "problem": "...
     setting: f.setting || "",
     why: f.why || "",
   };
+}
+
+
+// ── Full tree generation (from the team's main branch, adapted to Branchly's AI backend) ──
+
+interface GeneratedSubHypothesis {
+  title: string;
+  lens: string;
+  rationale: string;
+  confidence: number;
+  literatureQuery: string;
+  experiments: {
+    title: string;
+    goal: string;
+    steps: string[];
+    expectedResult: string;
+    rationale?: string;
+    confidence?: number;
+  }[];
+}
+
+interface GeneratedTree {
+  rootLiteratureQuery: string;
+  subHypotheses: GeneratedSubHypothesis[];
+}
+
+/** Papers for one claim: Semantic Scholar first, the field map's closest papers if that fails. */
+async function papersFor(query: string, claim: string, n: number): Promise<Evidence[]> {
+  try {
+    const r = await searchSemanticScholar(query, n);
+    if (r.papers.length)
+      return r.papers.map((p) => ({
+        text: p.abstract ? `${p.abstract.slice(0, 240)}…` : p.title,
+        citation: formatCitation(p.authors, p.year, p.venue),
+        url: p.url || undefined,
+        year: p.year || undefined,
+        paperId: p.paperId,
+      }));
+  } catch (e) {
+    console.warn(`Semantic Scholar found nothing for "${query}":`, e);
+  }
+  try {
+    const r = await locate(claim);
+    return r.nearest.slice(0, n).map((p) => {
+      const first = (p.authors?.[0] || "Unknown").replace(/,.*$/, "").split(" ").slice(-1)[0];
+      const year = new Date(p.announced * 1000).getFullYear();
+      return {
+        text: p.abstract ? `${p.abstract.slice(0, 240)}…` : p.title,
+        citation: `${first}${(p.authors?.length || 0) > 1 ? " et al." : ""}, ${year}`,
+        url: p.url,
+        year,
+        paperId: p.id,
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Breaks a main hypothesis into a complete validation tree in one go: 3-4 sub-hypotheses (what
+ * must be true / what could cause it / when might it not hold / what else could explain it),
+ * each with 1-2 planned experiments, and papers attached to the root and every sub-hypothesis.
+ */
+export async function generateFullHypothesisTree(mainHypothesis: string): Promise<TreeNode[]> {
+  const system = `You are a world-class Principal Investigator, mechanistic biologist, and scientific research strategist.
+Take a scientist's central hypothesis and decompose it into a complete, rigorous, testable hypothesis validation tree.
+
+A complete hypothesis tree contains:
+1. 3 to 4 distinct Sub-Hypotheses branching from the root, each from a different lens:
+   - "What must be true": a necessary precondition, correlation, or dependency.
+   - "What could cause it": the direct molecular, cellular, or causal mechanism.
+   - "When might it not hold": boundary conditions, cellular context, resistant subgroups, kinetic limits.
+   - "What else could explain it": competing hypotheses, non-specific toxicity, confounders.
+2. For each Sub-Hypothesis:
+   - "title": a precise, testable scientific claim.
+   - "lens": one of the lenses above.
+   - "rationale": why this link to the main hypothesis matters and what it establishes.
+   - "confidence": float between 0.65 and 0.95.
+   - "literatureQuery": a targeted 2-4 word Semantic Scholar query for papers on this specific claim.
+   - 1 to 2 planned Experiments, each with "title", "goal", "steps" (3-4 protocol steps), "expectedResult" (a specific readout or threshold that would support or refute it), "rationale", and "confidence" (0.60-0.90).
+3. A "rootLiteratureQuery": a targeted 2-4 word query for foundational literature on the main hypothesis.
+
+Return ONLY a valid JSON object:
+{"rootLiteratureQuery": "...", "subHypotheses": [{"title": "...", "lens": "...", "rationale": "...", "confidence": 0.85, "literatureQuery": "...", "experiments": [{"title": "...", "goal": "...", "steps": ["..."], "expectedResult": "...", "rationale": "...", "confidence": 0.8}]}]}
+
+Keep rationale, goals, and steps concise and high-signal (1-2 sentences each) so the whole tree fits.`;
+
+  const raw = await complete({
+    system: await withLiterature(system, mainHypothesis),
+    messages: [{ role: "user", content: `Central scientific hypothesis to decompose and validate:\n"${mainHypothesis.trim()}"` }],
+    maxTokens: 6000,
+  });
+
+  let json = raw.trim();
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  if (fenced) json = fenced[1].trim();
+  else {
+    const a = raw.indexOf("{");
+    const b = raw.lastIndexOf("}");
+    if (a !== -1 && b > a) json = raw.slice(a, b + 1);
+  }
+  let tree: GeneratedTree;
+  try {
+    tree = JSON.parse(json) as GeneratedTree;
+  } catch (err) {
+    throw new Error(
+      `Could not read the generated tree (${err instanceof Error ? err.message : String(err)}): ${raw.slice(0, 300)}…`,
+    );
+  }
+
+  const nodes: TreeNode[] = [
+    {
+      id: "root",
+      parentId: null,
+      kind: "root",
+      status: "untested",
+      title: mainHypothesis.trim(),
+      evidence: await papersFor(tree.rootLiteratureQuery || mainHypothesis.slice(0, 60), mainHypothesis, 3),
+    },
+  ];
+  const subs = (tree.subHypotheses || []).slice(0, 4);
+  for (let h = 0; h < subs.length; h++) {
+    const sub = subs[h];
+    const subId = `h${h + 1}`;
+    nodes.push({
+      id: subId,
+      parentId: "root",
+      kind: "hypothesis",
+      status: "untested",
+      title: sub.title,
+      rationale: sub.rationale,
+      lens: sub.lens,
+      confidence: sub.confidence ?? 0.8,
+      evidence: await papersFor(sub.literatureQuery || sub.title.slice(0, 60), sub.title, 2),
+    });
+    (sub.experiments || []).slice(0, 2).forEach((exp, e) =>
+      nodes.push({
+        id: `e${h + 1}${String.fromCharCode(97 + e)}`,
+        parentId: subId,
+        kind: "experiment",
+        status: "planned",
+        title: exp.title,
+        goal: exp.goal,
+        steps: exp.steps,
+        expectedResult: exp.expectedResult,
+        rationale: exp.rationale,
+        confidence: exp.confidence ?? 0.75,
+        evidence: [],
+      }),
+    );
+  }
+  return nodes;
 }

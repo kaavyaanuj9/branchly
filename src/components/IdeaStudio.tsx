@@ -36,16 +36,6 @@ interface Located {
   placement_confidence: number;
   nearest: FieldPaper[];
 }
-interface Candidate {
-  kind: "hypothesis" | "experiment";
-  title: string;
-  lens: string;
-  rationale: string;
-  confidence: number;
-  goal?: string;
-  steps?: string[];
-  expectedResult?: string;
-}
 
 const EXAMPLES = [
   "AML cells that survive venetoclax lean on GPX4 to avoid ferroptosis",
@@ -59,6 +49,15 @@ const NOVELTY = {
   sparse: { label: "Open ground", cls: "border-emerald-200 bg-emerald-50 text-emerald-900", dot: "#059669" },
 };
 const EASE = [0.22, 1, 0.36, 1] as const;
+
+/** The same paper can come from the field map and from Semantic Scholar; keep it once. */
+function dedupeEvidence(list: TreeNode["evidence"]) {
+  const seen = new Set<string>();
+  return list.filter((e) => {
+    const k = (e.url || e.text).toLowerCase().slice(0, 120);
+    return seen.has(k) ? false : (seen.add(k), true);
+  });
+}
 
 /** "Spoeck, S." and "K. Sarosiek" both -> the surname */
 const surname = (a?: string) => (!a ? "" : a.includes(",") ? a.split(",")[0] : a.trim().split(/\s+/).slice(-1)[0]);
@@ -82,7 +81,9 @@ export function IdeaStudio({
   const [error, setError] = useState<string | null>(null);
   const [tree, setTree] = useState<FieldItem | null>(null);
   const [located, setLocated] = useState<Located | null>(null);
-  const [candidates, setCandidates] = useState<Candidate[] | null>(null);
+  // the full tree drafted while the map plays: sub-hypotheses, experiments, papers
+  const [generated, setGenerated] = useState<TreeNode[] | null>(null);
+  const candidates = generated ? generated.filter((n) => n.parentId === "root") : null;
   const [candError, setCandError] = useState<string | null>(null);
   const [step, setStep] = useState(0);
   const latest = [...msgs].reverse().find((m) => m.f)?.f ?? null;
@@ -132,7 +133,7 @@ export function IdeaStudio({
     setPhase("map");
     setStep(0);
     setLocated(null);
-    setCandidates(null);
+    setGenerated(null);
     setCandError(null);
     getJSON<Located>(`/api/field/locate?q=${encodeURIComponent(latest.hypothesis)}`).then(
       (r) => {
@@ -144,12 +145,12 @@ export function IdeaStudio({
       },
       (e) => setError(e instanceof Error ? e.message : String(e)),
     );
-    getJSON<{ candidates: Candidate[] }>("/api/decompose", {
+    getJSON<{ nodes: TreeNode[] }>("/api/trees/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ node: { title: latest.hypothesis, rationale: latest.why } }),
+      body: JSON.stringify({ title: latest.hypothesis }),
     }).then(
-      (r) => setCandidates(r.candidates.slice(0, 4)),
+      (r) => setGenerated(r.nodes),
       (e) => setCandError(e instanceof Error ? e.message : String(e)),
     );
   };
@@ -166,27 +167,22 @@ export function IdeaStudio({
       title: latest.hypothesis,
       status: "untested",
       rationale: `${latest.why} Field map: ${path}. ${located.novelty_hint}`.trim(),
-      evidence: located.nearest.slice(0, 3).map(toEvidence),
+      // closest papers on the field map, plus the foundational ones Semantic Scholar found
+      evidence: dedupeEvidence([
+        ...located.nearest.slice(0, 3).map(toEvidence),
+        ...(generated?.find((n) => n.id === "root")?.evidence ?? []),
+      ]).slice(0, 6),
       fieldTopic: home ? located.node : undefined,
       fieldNoHome: !home,
       fieldNovelty: located.novelty_level,
       fieldRelevant: located.directly_relevant ?? undefined,
       fieldTopicFor: latest.hypothesis,
     };
-    const kids: TreeNode[] = (candidates ?? []).map((c) => ({
-      id: newId(),
-      parentId: "root",
-      kind: c.kind === "experiment" ? "experiment" : "hypothesis",
-      title: c.title,
-      status: c.kind === "experiment" ? "planned" : "untested",
-      lens: c.lens,
-      rationale: c.rationale,
-      confidence: c.confidence,
-      goal: c.goal,
-      steps: c.steps,
-      expectedResult: c.expectedResult,
-      evidence: [],
-    }));
+    // sub-hypotheses and their experiments, with fresh ids so they never clash
+    const ids = new Map<string, string>([["root", "root"]]);
+    const rest = (generated ?? []).filter((n) => n.id !== "root");
+    rest.forEach((n) => ids.set(n.id, newId()));
+    const kids: TreeNode[] = rest.map((n) => ({ ...n, id: ids.get(n.id)!, parentId: ids.get(n.parentId ?? "root") ?? "root" }));
     const chat: ChatMessage[] = msgs.map((m) => ({
       id: m.id,
       role: m.role === "user" ? "user" : "agent",
@@ -209,7 +205,7 @@ export function IdeaStudio({
       () => {},
     );
     onDone();
-  }, [latest, located, candidates, msgs, dispatch, onDone]);
+  }, [latest, located, generated, msgs, dispatch, onDone]);
 
   const grow = () => {
     setPhase("grow");
@@ -439,13 +435,13 @@ export function IdeaStudio({
                         </>
                       ) : (
                         <>
-                          <Loader2 className="size-4 animate-spin" /> Claude is drafting the first branches…
+                          <Loader2 className="size-4 animate-spin" /> Drafting sub-hypotheses, experiments and papers…
                         </>
                       )}
                     </button>
                     {candError && (
                       <p className="text-[11.5px] text-neutral-500">
-                        Claude couldn&apos;t draft branches ({candError.slice(0, 80)}); the tree will start with just your
+                        The tree couldn&apos;t be drafted ({candError.slice(0, 80)}); it will start with just your
                         hypothesis.
                       </p>
                     )}
@@ -457,7 +453,9 @@ export function IdeaStudio({
           </motion.section>
         )}
 
-        {phase === "grow" && latest && <Grow key="grow" f={latest} candidates={candidates ?? []} located={located} />}
+        {phase === "grow" && latest && (
+          <Grow key="grow" f={latest} candidates={candidates ?? []} all={generated ?? []} located={located} />
+        )}
       </AnimatePresence>
     </motion.div>
   );
@@ -722,7 +720,7 @@ function FieldCamera({ tree, located, step }: { tree: FieldItem | null; located:
 
 // ── the tree grows out of the idea, left to right like the tree it becomes ───
 
-function Grow({ f, candidates, located }: { f: Formulation; candidates: Candidate[]; located: Located | null }) {
+function Grow({ f, candidates, all, located }: { f: Formulation; candidates: TreeNode[]; all: TreeNode[]; located: Located | null }) {
   const n = candidates.length;
   const ROW = 118;
   const H = Math.max(240, n * ROW);
@@ -777,8 +775,14 @@ function Grow({ f, candidates, located }: { f: Formulation; candidates: Candidat
                   </p>
                   <p className="mt-1 line-clamp-3 text-[12.5px] leading-snug text-neutral-800">{c.title}</p>
                   {c.kind !== "experiment" && (
-                    <p className="mt-1.5 text-[11px] text-neutral-500">
-                      <b className="font-semibold text-neutral-800">{Math.round((c.confidence ?? 0.5) * 100)}%</b> · 0 papers
+                    <p className="mt-1.5 flex items-center gap-1 text-[11px] text-neutral-500">
+                      <b className="font-semibold text-neutral-800">{Math.round((c.confidence ?? 0.5) * 100)}%</b> ·{" "}
+                      {c.evidence.length} paper{c.evidence.length === 1 ? "" : "s"}
+                      {all.some((e) => e.parentId === c.id) && (
+                        <span className="ml-auto flex items-center gap-0.5 text-neutral-400">
+                          <FlaskConical className="size-3" /> {all.filter((e) => e.parentId === c.id).length}
+                        </span>
+                      )}
                     </p>
                   )}
                 </motion.div>
