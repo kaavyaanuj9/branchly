@@ -572,9 +572,14 @@ class Engine:
         # Crowdedness: how many of the 20 closest papers a cross-encoder judges to directly
         # address the idea. Max similarity alone misled on short ideas mixing two concepts.
         relevant = None
+        addressing = []   # the closest papers judged to directly address the idea, best first
         if self.reranker is not None:
             docs = [self.papers[p]["title"] + ". " + self.papers[p]["abstract"][:300] for p in top20]
-            relevant = int((self.reranker.score(text, docs) > 0).sum())
+            scores = self.reranker.score(text, docs)
+            relevant = int((scores > 0).sum())
+            for i in np.argsort(-scores)[:5]:
+                if scores[i] > 0:
+                    addressing.append(dict(self._card(top20[i], abstract_chars=400), relevance=round(float(scores[i]), 2)))
             level = "crowded" if relevant >= 6 else "related" if relevant >= 2 else "sparse"
         elif pct is not None:
             level = "crowded" if pct >= 75 else "related" if pct >= 25 else "sparse"
@@ -592,7 +597,7 @@ class Engine:
         return {"branch": bid, "node": nid, "path": self.path(nid), "method": name,
                 "placement_confidence": confidence,
                 "bridge": bridge and {"branch": bridge, "label": self._branch_label(bridge)},
-                "nearest": hits, "max_similarity": best, "closeness_percentile": pct,
+                "nearest": hits, "addressing": addressing, "max_similarity": best, "closeness_percentile": pct,
                 "directly_relevant": relevant, "relevance_checked": 20 if relevant is not None else 0,
                 "novelty_level": level, "novelty_hint": hint}
 
