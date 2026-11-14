@@ -125,6 +125,8 @@ def poll_new(known_ids, days=2):
         for p in fetch_range(start, today.isoformat(), cat):
             if p["id"] in known_ids or p["id"] in fresh or p["version"] > 1:
                 continue
+            if not is_relevant(p["title"], p["abstract"]):
+                continue
             p["announced"] = now          # caught live: public since we first saw it
             fresh[p["id"]] = (p, "biorxiv")
     return list(fresh.values())
@@ -136,7 +138,7 @@ def backfill(days=config.BACKFILL_DAYS, cap=config.BACKFILL_MAX, log=print):
     start = (today - timedelta(days=days)).isoformat()
     got = []
     for cat in FIELD.BIORXIV_CATEGORIES:
-        papers = fetch_range(start, today.isoformat(), cat)
+        papers = [p for p in fetch_range(start, today.isoformat(), cat) if is_relevant(p["title"], p["abstract"])]
         log(f"  {cat}: {len(papers)} preprints")
         got.extend(papers)
     return got[:cap]
@@ -153,7 +155,8 @@ def backfill_history(start=None, until=None, done=(), on_month=None, log=print):
             got = {}
             for cat in FIELD.BIORXIV_CATEGORIES:
                 for p in fetch_range(d0.isoformat(), (nxt - timedelta(days=1)).isoformat(), cat):
-                    got.setdefault(p["id"], p)
+                    if is_relevant(p["title"], p["abstract"]):
+                        got.setdefault(p["id"], p)
             log(f"  {key}: {len(got)} preprints")
             if on_month:
                 on_month(key, list(got.values()))
