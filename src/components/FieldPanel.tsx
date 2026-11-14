@@ -11,6 +11,7 @@ import {
   Plus,
   RefreshCw,
 } from "lucide-react";
+import { fieldQuery } from "@/lib/fieldQuery";
 import { useStore } from "@/lib/store";
 import type { Evidence, TreeNode } from "@/lib/types";
 import { useUI } from "./uiContext";
@@ -93,7 +94,7 @@ export function FieldPanel({ node, parent }: { node: TreeNode; parent?: TreeNode
           </button>
         ))}
       </div>
-      {tab === "where" && <WhereItSits node={node} />}
+      {tab === "where" && <WhereItSits node={node} parent={parent} />}
       {tab === "tested" && <TestedCheck node={node} parent={parent} />}
       {tab === "read" && <ReadingList node={node} />}
       {tab === "watch" && <WatchField node={node} />}
@@ -201,10 +202,12 @@ const NOVELTY_STYLE = {
   sparse: "border-emerald-200 bg-emerald-50 text-emerald-900",
 };
 
-function WhereItSits({ node }: { node: TreeNode }) {
+function WhereItSits({ node, parent }: { node: TreeNode; parent?: TreeNode }) {
+  // same query as the field map uses to place this box, so the two always agree
+  const query = fieldQuery(node, parent);
   const load = useCallback(
-    () => getJSON<LocateResult>(`/api/field/locate?q=${encodeURIComponent(node.title)}`),
-    [node.title],
+    () => getJSON<LocateResult>(`/api/field/locate?q=${encodeURIComponent(query)}`),
+    [query],
   );
   const { data, error, loading } = useLoad(load);
   const { openFieldMap } = useUI();

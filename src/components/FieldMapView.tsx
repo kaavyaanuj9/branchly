@@ -16,6 +16,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { ChevronRight, Flame, Loader2, Network, Search, Users, X } from "lucide-react";
+import { fieldQuery, MIN_PLACEMENT_CONFIDENCE } from "@/lib/fieldQuery";
 import { useStore } from "@/lib/store";
 import type { TreeNode } from "@/lib/types";
 import { PaperRow, type FieldPaper } from "./FieldPanel";
@@ -130,6 +131,9 @@ function FieldMap() {
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [found, setFound] = useState<{ hint: string; level: string } | null>(null);
+  const [showHomeless, setShowHomeless] = useState(false);
+  const { setView } = useUI();
+  const homeless = state.nodes.filter((n) => n.fieldNoHome && !n.folded);
 
   // Load the map; if opened from a box ("Show on the field map"), open the path to its topic.
   useEffect(() => {
@@ -159,10 +163,12 @@ function FieldMap() {
     return { parentOf, colorOf };
   }, [root]);
 
-  // Place the team's ideas on the map (once per title; remembered on each box).
+  // Place the team's ideas on the map, each with its parent idea as context; remembered on the
+  // box and redone when its title or parent changes. Weak placements get no badge.
   useEffect(() => {
+    const queryOf = (n: TreeNode) => fieldQuery(n, state.nodes.find((p) => p.id === n.parentId));
     const todo = state.nodes.filter(
-      (n) => (n.kind === "root" || n.kind === "hypothesis") && !n.folded && n.fieldTopicFor !== n.title,
+      (n) => (n.kind === "root" || n.kind === "hypothesis") && !n.folded && n.fieldTopicFor !== queryOf(n),
     );
     if (!root || todo.length === 0) return;
     let live = true;
@@ -171,8 +177,16 @@ function FieldMap() {
         if (!live) return;
         setPlacing(todo.length - todo.indexOf(n));
         try {
-          const r = await getJSON<{ node: string }>(`/api/field/locate?q=${encodeURIComponent(n.title)}`);
-          dispatch({ type: "updateNode", id: n.id, patch: { fieldTopic: r.node, fieldTopicFor: n.title } });
+          const q = queryOf(n);
+          const r = await getJSON<{ node: string; placement_confidence: number }>(
+            `/api/field/locate?q=${encodeURIComponent(q)}`,
+          );
+          const home = r.placement_confidence >= MIN_PLACEMENT_CONFIDENCE;
+          dispatch({
+            type: "updateNode",
+            id: n.id,
+            patch: { fieldTopic: home ? r.node : undefined, fieldNoHome: !home, fieldTopicFor: q },
+          });
         } catch {
           /* map unreachable: leave unplaced */
         }
@@ -188,7 +202,7 @@ function FieldMap() {
   const teamAt = useMemo(() => {
     const m = new Map<string, TreeNode[]>();
     for (const n of state.nodes) {
-      if (!n.fieldTopic || n.folded) continue;
+      if (!n.fieldTopic || n.folded || n.fieldNoHome) continue;
       let cur: string | undefined = n.fieldTopic;
       while (cur) {
         m.set(cur, [...(m.get(cur) ?? []), n]);
@@ -347,6 +361,26 @@ function FieldMap() {
             {searching ? <Loader2 className="size-3.5 animate-spin" /> : "Locate"}
           </button>
         </form>
+        {showHomeless && homeless.length > 0 && (
+          <div className="absolute bottom-16 left-16 z-10 w-[min(420px,calc(100%-5rem))] space-y-1.5 rounded-xl border border-slate-200 bg-white/95 p-3 text-[12.5px] shadow-sm">
+            <p className="text-slate-500">
+              No topic on the map clearly matches these ideas. They may be new ground, or outside what
+              the map covers. Click one to open it.
+            </p>
+            {homeless.map((n) => (
+              <button
+                key={n.id}
+                onClick={() => {
+                  dispatch({ type: "select", id: n.id });
+                  setView("project");
+                }}
+                className="block w-full rounded-md border border-slate-100 bg-slate-50 p-1.5 text-left text-slate-700 hover:border-indigo-300"
+              >
+                {n.title}
+              </button>
+            ))}
+          </div>
+        )}
         {found && (
           <div className="absolute left-4 top-16 z-10 flex max-w-[520px] items-start gap-2 rounded-xl border border-slate-200 bg-white/95 p-2.5 text-[12.5px] text-slate-700 shadow-sm">
             <span>{found.hint}</span>
@@ -363,6 +397,14 @@ function FieldMap() {
           <span className="flex items-center gap-1 text-orange-600">
             <Flame className="size-3" /> growing faster than the field
           </span>
+          {homeless.length > 0 && (
+            <button
+              onClick={() => setShowHomeless(!showHomeless)}
+              className="pointer-events-auto text-slate-500 underline decoration-dotted hover:text-slate-800"
+            >
+              {homeless.length} idea{homeless.length > 1 ? "s" : ""} with no clear home
+            </button>
+          )}
           {placing > 0 && (
             <span className="flex items-center gap-1 text-slate-500">
               <Loader2 className="size-3 animate-spin" /> placing your ideas ({placing} left)

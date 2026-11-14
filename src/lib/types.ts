@@ -90,7 +90,10 @@ export interface TreeNode {
   fieldWatch?: string;
   /** Where this box sits on the field map (a Research Tree topic id), and for which title. */
   fieldTopic?: string;
+  /** The query fieldTopic was computed for (re-placed when the title or parent changes). */
   fieldTopicFor?: string;
+  /** Located, but no clear home on the field map (placement confidence too low). */
+  fieldNoHome?: boolean;
   foldedReason?: string;
 }
 
