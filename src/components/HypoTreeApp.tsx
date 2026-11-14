@@ -6,6 +6,7 @@ import {
   BookOpen,
   CircleHelp,
   FlaskConical,
+  LogOut,
   MessageSquare,
   MessageSquareOff,
   MousePointerClick,
@@ -26,17 +27,23 @@ import { UIContext, type EditorRequest, type UIContextValue } from "./uiContext"
 
 // The whole HypoTree screen: header, toolbar, tree, detail panel and chat.
 
-export function HypoTreeApp() {
+export type SignedInUser = {
+  email: string;
+  name: string;
+  avatarUrl: string | null;
+};
+
+export function HypoTreeApp({ user }: { user: SignedInUser | null }) {
   return (
     <StoreProvider>
       <ReactFlowProvider>
-        <Workspace />
+        <Workspace user={user} />
       </ReactFlowProvider>
     </StoreProvider>
   );
 }
 
-function Workspace() {
+function Workspace({ user }: { user: SignedInUser | null }) {
   const { state, dispatch } = useStore();
   const [chatOpen, setChatOpen] = useState(true);
   const [editor, setEditor] = useState<EditorRequest | null>(null);
@@ -119,6 +126,35 @@ function Workspace() {
             >
               <CircleHelp className="size-5" />
             </button>
+            {user && (
+              <div className="flex items-center gap-2 border-l border-slate-200 pl-4">
+                {user.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={user.avatarUrl}
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    className="size-7 rounded-full"
+                  />
+                ) : (
+                  <span className="flex size-7 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-800">
+                    {user.name.charAt(0).toUpperCase()}
+                  </span>
+                )}
+                <span className="hidden max-w-40 truncate text-slate-700 md:inline" title={user.email}>
+                  {user.name}
+                </span>
+                <form action="/auth/signout" method="post">
+                  <button
+                    type="submit"
+                    className="rounded-full p-1 transition hover:bg-slate-100 hover:text-slate-900"
+                    title="Sign out"
+                  >
+                    <LogOut className="size-4" />
+                  </button>
+                </form>
+              </div>
+            )}
           </div>
         </header>
 

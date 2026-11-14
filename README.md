@@ -31,6 +31,30 @@ Powered by:
 
 ---
 
+## 🔐 Set up Google sign-in (Firebase)
+
+Every page and API route requires signing in with Google. Signed-out visitors are sent to `/login`, and API calls get a `401`.
+
+1. In the [Firebase console](https://console.firebase.google.com), open your project and enable **Authentication → Sign-in method → Google**.
+2. Under **Authentication → Settings → Authorized domains**, make sure your production domain is listed (`localhost` is there by default).
+3. **Project settings → General → Your apps**: add a web app and copy its config into `.env.local`:
+   ```bash
+   NEXT_PUBLIC_FIREBASE_API_KEY=...
+   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=<project>.firebaseapp.com
+   NEXT_PUBLIC_FIREBASE_PROJECT_ID=<project>
+   NEXT_PUBLIC_FIREBASE_APP_ID=...
+   ```
+4. **Project settings → Service accounts → Generate new private key**, then copy these fields from the downloaded JSON (keep this secret, never commit it):
+   ```bash
+   FIREBASE_PROJECT_ID=<project_id>
+   FIREBASE_CLIENT_EMAIL=<client_email>
+   FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+   ```
+
+How it works: the login page runs Google sign-in with the Firebase web SDK, then posts the ID token to `/api/auth/session`. The server verifies it with `firebase-admin` and sets a 5-day httpOnly `__session` cookie, which `src/proxy.ts` checks on every request.
+
+---
+
 ## 🚀 Run it
 
 ```bash
@@ -82,5 +106,11 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 | `src/components/TreeCanvas.tsx` | Interactive React Flow canvas with confidence-weighted edges. |
 | `src/components/DetailPanel.tsx` | Selected node inspection, protocols, results, and evidence curation. |
 | `src/components/ChatPanel.tsx` | Per-node conversational co-investigator with Claude Sonnet 5.5. |
+| `src/proxy.ts` | Gates every page and API route on a valid Firebase session cookie. |
+| `src/lib/firebase/admin.ts` | Server-only Firebase Admin setup and session-cookie verification. |
+| `src/lib/firebase/client.ts` | Browser Firebase setup used for the Google sign-in popup. |
+| `src/app/login/` | Login page with the "Sign in with Google" button. |
+| `src/app/api/auth/session/route.ts` | Exchanges a fresh Google sign-in for the session cookie. |
+| `src/app/auth/signout/route.ts` | Clears the session cookie. |
 | `src/lib/store.tsx` | Unified React store and `localStorage` persistence. |
 | `src/lib/types.ts` | TypeScript types for tree nodes, evidence, papers, and proposals. |
