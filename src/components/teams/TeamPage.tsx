@@ -6,10 +6,11 @@ import { useCallback, useEffect, useState } from "react";
 import { Check, GitBranch, LogOut, Pencil, Plus, Trash2, UserPlus, X } from "lucide-react";
 import { useCurrentUser } from "@/lib/firebase/FirebaseProvider";
 import { api, createTree, renameTree, useTeam, useTrees } from "@/lib/teams";
-import type { Invite, Role, Team, TreeMeta } from "@/lib/types";
+import type { Invite, Role, Team, TreeMeta, TreeNode } from "@/lib/types";
 import { Avatar } from "@/components/UserMenu";
 import { AvatarStack, ProgressBar } from "@/components/Assignment";
 import { TeamContext } from "@/components/teamContext";
+import { TreeGenerationModal } from "./TreeGenerationModal";
 import {
   Button,
   Card,
@@ -135,26 +136,39 @@ function TreesCard({ team, canEdit }: { team: Team; canEdit: boolean }) {
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [genTitle, setGenTitle] = useState("");
+  const [showGenModal, setShowGenModal] = useState(false);
 
-  async function create(e: React.FormEvent) {
+  function handleCreateClick(e: React.FormEvent) {
     e.preventDefault();
-    setBusy(true);
-    setError("");
-    try {
-      const id = await createTree(team.id, uid, title.trim());
-      router.push(`/teams/${team.id}/trees/${id}`);
-    } catch (err) {
-      setError(errorMessage(err));
-      setBusy(false);
-    }
+    if (!title.trim() || busy) return;
+    setGenTitle(title.trim());
+    setShowGenModal(true);
   }
+
+  const handleGenerated = useCallback(
+    async (nodes: TreeNode[]) => {
+      setBusy(true);
+      setError("");
+      try {
+        const id = await createTree(team.id, uid, genTitle, nodes);
+        setShowGenModal(false);
+        router.push(`/teams/${team.id}/trees/${id}`);
+      } catch (err) {
+        setError(errorMessage(err));
+        setShowGenModal(false);
+        setBusy(false);
+      }
+    },
+    [team.id, uid, genTitle, router],
+  );
 
   return (
     <Card className="space-y-4">
       <h2 className="text-[15px] font-semibold">Hypothesis trees</h2>
 
       {canEdit && (
-        <form onSubmit={create} className="space-y-2">
+        <form onSubmit={handleCreateClick} className="space-y-2">
           <div className="flex gap-2">
             <input
               value={title}
@@ -169,6 +183,18 @@ function TreesCard({ team, canEdit }: { team: Team; canEdit: boolean }) {
           </div>
           <ErrorText>{error}</ErrorText>
         </form>
+      )}
+
+      {showGenModal && (
+        <TreeGenerationModal
+          hypothesisTitle={genTitle}
+          isOpen={showGenModal}
+          onSuccess={handleGenerated}
+          onCancel={() => {
+            setShowGenModal(false);
+            setBusy(false);
+          }}
+        />
       )}
 
       <ul className="divide-y divide-slate-100 rounded-xl border border-slate-100">

@@ -68,58 +68,69 @@ export async function searchSemanticScholar(
     "User-Agent": "HypoTree-Scientific-Workspace/1.0 (academic-research)",
   };
 
-  // Optional key support if user ever sets it, but strictly NOT required
-  const optionalKey = process.env.SEMANTIC_SCHOLAR_API_KEY?.trim();
-  if (optionalKey) {
-    headers["x-api-key"] = optionalKey;
+  const apiKey = process.env.SEMANTIC_SCHOLAR_API_KEY?.trim();
+  if (apiKey) {
+    headers["x-api-key"] = apiKey;
   }
 
-  // Execute request with retry on rate limit
-  const maxAttempts = 3;
+  // If an API key is provided, prefer the dedicated relevance search endpoint with fallback to bulk
+  const candidateUrls = apiKey
+    ? [
+        `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(cleanQuery)}&limit=${limit}&fields=${fields}`,
+        url,
+      ]
+    : [url];
+
+  const maxAttempts = 2;
   let lastError: Error | null = null;
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      const res = await fetch(url, {
-        method: "GET",
-        headers,
-        cache: "no-store",
-      });
+  for (const targetUrl of candidateUrls) {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const res = await fetch(targetUrl, {
+          method: "GET",
+          headers,
+          cache: "no-store",
+        });
 
-      if (res.status === 429 && attempt < maxAttempts) {
-        // Wait 1.5s before retrying
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-        continue;
-      }
-
-      if (!res.ok) {
-        let errorMsg = `Semantic Scholar request failed (${res.status} ${res.statusText})`;
-        try {
-          const errJson = await res.json();
-          if (errJson.message) errorMsg = errJson.message;
-          if (errJson.error) errorMsg = errJson.error;
-        } catch {
-          // ignore json parse error
+        if (res.status === 429 && attempt < maxAttempts) {
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+          continue;
         }
-        throw new Error(errorMsg);
-      }
 
-      const data = await res.json();
-      const allPapers: SemanticScholarPaper[] = data.data || [];
-      const slicedPapers = allPapers.slice(0, limit);
-      const total = data.total || allPapers.length;
+        if (!res.ok) {
+          // If this endpoint failed and we have another candidate, break to next candidate
+          if (candidateUrls.length > 1 && targetUrl !== url) {
+            break;
+          }
+          let errorMsg = `Semantic Scholar request failed (${res.status} ${res.statusText})`;
+          try {
+            const errJson = await res.json();
+            if (errJson.message) errorMsg = errJson.message;
+            if (errJson.error) errorMsg = errJson.error;
+          } catch {
+            // ignore
+          }
+          throw new Error(errorMsg);
+        }
 
-      const result = {
-        papers: slicedPapers,
-        total,
-      };
+        const data = await res.json();
+        const allPapers: SemanticScholarPaper[] = data.data || [];
+        const slicedPapers = allPapers.slice(0, limit);
+        const total = data.total || allPapers.length;
 
-      searchCache.set(cacheKey, { ...result, timestamp: Date.now() });
-      return result;
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
-      if (attempt < maxAttempts) {
-        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const result = {
+          papers: slicedPapers,
+          total,
+        };
+
+        searchCache.set(cacheKey, { ...result, timestamp: Date.now() });
+        return result;
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        if (attempt < maxAttempts) {
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+        }
       }
     }
   }

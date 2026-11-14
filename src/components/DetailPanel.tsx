@@ -328,7 +328,7 @@ export function DetailPanel({ node }: { node: TreeNode }) {
 
         <Section title={node.kind === "root" ? "Literature" : "Supporting evidence"}>
           <div className="space-y-2">
-            {node.evidence.map((e, i) => (
+            {(node.evidence || []).map((e, i) => (
               <div
                 key={i}
                 className="group relative flex items-start justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/70 p-2.5 text-[13px] leading-relaxed text-slate-700"

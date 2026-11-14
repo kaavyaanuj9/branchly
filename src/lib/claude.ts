@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { Proposal, TreeNode } from "./types";
+import type { Evidence, Proposal, TreeNode } from "./types";
+import { formatCitation, searchSemanticScholar } from "./semanticScholar";
 
 export function getAnthropicClient(): { client: Anthropic; model: string } {
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
@@ -9,8 +10,12 @@ export function getAnthropicClient(): { client: Anthropic; model: string } {
     );
   }
 
-  // Uses Sonnet 5.5 medium as requested, overridable via ANTHROPIC_MODEL env var
-  const model = process.env.ANTHROPIC_MODEL?.trim() || "claude-sonnet-5.5";
+  // Uses Sonnet 5.5 as requested, overridable via ANTHROPIC_MODEL env var
+  let model = process.env.ANTHROPIC_MODEL?.trim() || "claude-sonnet-5-5";
+  // Normalize dot notation e.g. "claude-sonnet-5.5" -> "claude-sonnet-5-5"
+  if (model === "claude-sonnet-5.5" || model === "sonnet-5.5" || model === "sonnet-5-5") {
+    model = "claude-sonnet-5-5";
+  }
   const client = new Anthropic({ apiKey });
   return { client, model };
 }
@@ -405,4 +410,201 @@ JSON shape:
   }
 
   return JSON.parse(jsonMatch[0]);
+}
+
+interface GeneratedSubHypothesis {
+  title: string;
+  lens: string;
+  rationale: string;
+  confidence: number;
+  literatureQuery: string;
+  experiments: {
+    title: string;
+    goal: string;
+    steps: string[];
+    expectedResult: string;
+    rationale?: string;
+    confidence?: number;
+  }[];
+}
+
+interface GeneratedTreeStructure {
+  rootLiteratureQuery: string;
+  subHypotheses: GeneratedSubHypothesis[];
+}
+
+/**
+ * Uses Claude Sonnet 5.5 to break down a main hypothesis into a complete validation tree,
+ * and fetches peer-reviewed papers with citations from Semantic Scholar for every sub-hypothesis.
+ */
+export async function generateFullHypothesisTree(mainHypothesis: string): Promise<TreeNode[]> {
+  const { client, model } = getAnthropicClient();
+
+  const systemPrompt = `You are a world-class Principal Investigator, mechanistic biologist, and scientific research strategist.
+Your role is to take a scientist's central hypothesis and decompose it into a complete, rigorous, testable hypothesis validation tree.
+
+A complete hypothesis tree must contain:
+1. 3 to 4 distinct Sub-Hypotheses branching from the root, exploring essential scientific angles/lenses:
+   - "What must be true": A necessary precondition, correlation, or dependency required for the hypothesis to hold.
+   - "What could cause it": The direct molecular, cellular, or causal mechanism through which the effect occurs.
+   - "When might it not hold": Boundary conditions, cellular context, resistant subgroups, or kinetic/temporal limitations.
+   - "What else could explain it": Alternative competing hypotheses, non-specific toxicity, or confounding variables.
+2. For each Sub-Hypothesis:
+   - "title": A precise, testable scientific claim.
+   - "lens": One of the lenses above.
+   - "rationale": Clear explanation of why this link to the main hypothesis is crucial and what it establishes.
+   - "confidence": Float between 0.65 and 0.95.
+   - "literatureQuery": A highly targeted 2-4 word search query for Semantic Scholar to retrieve published peer-reviewed papers relevant to this specific claim (e.g. 'BH3 profiling venetoclax CLL', 'TP53 independent venetoclax apoptosis').
+   - 1 to 2 concrete planned Experiments under that sub-hypothesis:
+     - "title": Name of the empirical assay/experiment.
+     - "goal": Clear statement of what the experiment will measure or test.
+     - "steps": Array of 3-4 protocol steps.
+     - "expectedResult": Specific observable readout or threshold that would support or refute the sub-hypothesis.
+     - "rationale": Why this experiment directly tests the claim.
+     - "confidence": Float between 0.60 and 0.90.
+3. Also provide a "rootLiteratureQuery": A targeted 2-4 word query to find foundational literature for the main hypothesis on Semantic Scholar.
+
+Return strictly a valid JSON object matching this schema:
+{
+  "rootLiteratureQuery": "...",
+  "subHypotheses": [
+    {
+      "title": "...",
+      "lens": "...",
+      "rationale": "...",
+      "confidence": 0.85,
+      "literatureQuery": "...",
+      "experiments": [
+        {
+          "title": "...",
+          "goal": "...",
+          "steps": ["Step 1", "Step 2", "Step 3"],
+          "expectedResult": "...",
+          "rationale": "...",
+          "confidence": 0.80
+        }
+      ]
+    }
+  ]
+}
+
+Keep rationale, goals, and protocol steps concise, dense, and high-signal (1-2 sentences each) so that the entire tree is generated cleanly without truncation.`;
+
+  const response = await client.messages.create({
+    model,
+    max_tokens: 6000,
+    system: systemPrompt,
+    messages: [
+      {
+        role: "user",
+        content: `Central Scientific Hypothesis to decompose and validate:\n"${mainHypothesis.trim()}"`,
+      },
+    ],
+  });
+
+  const rawText = response.content
+    .filter((c) => c.type === "text")
+    .map((c) => (c as Anthropic.TextBlock).text)
+    .join("\n");
+
+  let jsonString = rawText.trim();
+  const jsonBlockMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  if (jsonBlockMatch) {
+    jsonString = jsonBlockMatch[1].trim();
+  } else {
+    const firstBrace = rawText.indexOf("{");
+    const lastBrace = rawText.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      jsonString = rawText.slice(firstBrace, lastBrace + 1);
+    }
+  }
+
+  let parsed: GeneratedTreeStructure;
+  try {
+    parsed = JSON.parse(jsonString) as GeneratedTreeStructure;
+  } catch (err) {
+    throw new Error(
+      `Failed to parse Claude tree generation response (${err instanceof Error ? err.message : String(err)}): ${rawText.slice(0, 300)}...`,
+    );
+  }
+
+  // Search Semantic Scholar for root literature
+  const rootQuery = parsed.rootLiteratureQuery || mainHypothesis.slice(0, 60);
+  let rootEvidence: Evidence[] = [];
+  try {
+    const rootResult = await searchSemanticScholar(rootQuery, 3);
+    rootEvidence = (rootResult.papers || []).map((p) => ({
+      text: p.abstract ? `${p.abstract.slice(0, 240)}…` : p.title,
+      citation: formatCitation(p.authors, p.year, p.venue),
+      url: p.url || undefined,
+      year: p.year || undefined,
+      paperId: p.paperId,
+    }));
+  } catch (e) {
+    console.warn("Could not fetch root papers from Semantic Scholar:", e);
+  }
+
+  const nodes: TreeNode[] = [
+    {
+      id: "root",
+      parentId: null,
+      kind: "root",
+      status: "untested",
+      title: mainHypothesis.trim(),
+      evidence: rootEvidence,
+    },
+  ];
+
+  // For each sub-hypothesis, search Semantic Scholar and assemble nodes
+  for (let hIdx = 0; hIdx < (parsed.subHypotheses || []).length; hIdx++) {
+    const sub = parsed.subHypotheses[hIdx];
+    const subId = `h${hIdx + 1}`;
+    let subEvidence: Evidence[] = [];
+
+    try {
+      const subQuery = sub.literatureQuery || sub.title.slice(0, 60);
+      const subResult = await searchSemanticScholar(subQuery, 2);
+      subEvidence = (subResult.papers || []).map((p) => ({
+        text: p.abstract ? `${p.abstract.slice(0, 240)}…` : p.title,
+        citation: formatCitation(p.authors, p.year, p.venue),
+        url: p.url || undefined,
+        year: p.year || undefined,
+        paperId: p.paperId,
+      }));
+    } catch (e) {
+      console.warn(`Could not fetch papers for sub-hypothesis ${subId}:`, e);
+    }
+
+    nodes.push({
+      id: subId,
+      parentId: "root",
+      kind: "hypothesis",
+      status: "untested",
+      title: sub.title,
+      rationale: sub.rationale,
+      lens: sub.lens,
+      confidence: sub.confidence ?? 0.8,
+      evidence: subEvidence,
+    });
+
+    for (let eIdx = 0; eIdx < (sub.experiments || []).length; eIdx++) {
+      const exp = sub.experiments[eIdx];
+      const expId = `e${hIdx + 1}${String.fromCharCode(97 + eIdx)}`;
+      nodes.push({
+        id: expId,
+        parentId: subId,
+        kind: "experiment",
+        status: "planned",
+        title: exp.title,
+        goal: exp.goal,
+        steps: exp.steps,
+        expectedResult: exp.expectedResult,
+        rationale: exp.rationale,
+        confidence: exp.confidence ?? 0.75,
+        evidence: [],
+      });
+    }
+  }
+
+  return nodes;
 }
