@@ -96,7 +96,7 @@ export function FieldPanel({ node, parent }: { node: TreeNode; parent?: TreeNode
             className={`flex items-center gap-1 rounded-md border px-2 py-1 text-[12px] font-medium transition ${
               tab === t.id
                 ? "border-neutral-900 bg-neutral-900 text-white"
-                : "border-slate-200 bg-white text-slate-600 hover:border-neutral-500 hover:text-neutral-900"
+                : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-500 hover:text-neutral-900"
             }`}
           >
             {t.icon} {t.label}
@@ -146,7 +146,7 @@ function useLoad<T>(load: () => Promise<T>, auto = true) {
 function Status({ loading, error, note }: { loading: boolean; error: string | null; note?: string }) {
   if (loading)
     return (
-      <p className="flex items-center gap-1.5 text-[12px] text-slate-500">
+      <p className="flex items-center gap-1.5 text-[12px] text-neutral-500">
         <Loader2 className="size-3 animate-spin" /> {note || "Asking the field map…"}
       </p>
     );
@@ -160,13 +160,13 @@ export function PaperRow({ paper, node, extra }: { paper: FieldPaper; node?: Tre
   const nav = useFieldNav();
   const added = !!node?.evidence.some((e) => e.url === paper.url || e.paperId === paper.id);
   return (
-    <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-2.5 text-[12.5px] leading-snug">
+    <div className="rounded-lg bg-neutral-100 px-3.5 py-3 text-[13px] leading-snug">
       <div className="flex items-start justify-between gap-2">
         <a
           href={paper.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="font-medium text-slate-800 hover:text-neutral-900 hover:underline"
+          className="font-medium text-neutral-900 hover:underline"
         >
           {paper.title}
         </a>
@@ -180,12 +180,12 @@ export function PaperRow({ paper, node, extra }: { paper: FieldPaper; node?: Tre
                 ? "Already in this box's evidence"
                 : `Add to the evidence of "${node.title.slice(0, 60)}"`
           }
-          className="flex shrink-0 items-center gap-0.5 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-600 hover:border-neutral-500 hover:text-neutral-900 disabled:opacity-60"
+          className="flex shrink-0 items-center gap-0.5 rounded-md border border-neutral-300 bg-white px-1.5 py-0.5 text-[11px] font-medium text-neutral-700 hover:border-neutral-900 hover:text-neutral-900 disabled:opacity-60"
         >
           {added ? <Check className="size-3" /> : <Plus className="size-3" />} Evidence
         </button>
       </div>
-      <p className="mt-1 text-[11.5px] text-slate-500">
+      <p className="mt-1.5 text-[12px] text-neutral-500">
         {citationOf(paper)}
         {paper.reason ? ` · ${paper.reason}` : ""}
         {paper.built_on !== undefined && (
@@ -223,7 +223,7 @@ interface LocateResult {
 const NOVELTY_STYLE = {
   crowded: "border-amber-200 bg-amber-50 text-amber-900",
   related: "border-sky-200 bg-sky-50 text-sky-900",
-  sparse: "border-emerald-200 bg-emerald-50 text-emerald-900",
+  sparse: "border-neutral-300 bg-neutral-100 text-neutral-900",
 };
 
 function WhereItSits({ node, parent }: { node: TreeNode; parent?: TreeNode }) {
@@ -240,9 +240,9 @@ function WhereItSits({ node, parent }: { node: TreeNode; parent?: TreeNode }) {
       <Status loading={loading} error={error} />
       {data && (
         <>
-          <p className="text-[12px] text-slate-500">
+          <p className="text-[12px] text-neutral-500">
             {data.placement_confidence >= 0.35 ? "Sits in " : "Closest fit (no clear home): "}
-            <span className="font-medium text-slate-700">
+            <span className="font-medium text-neutral-700">
               {data.path.slice(1).map((p) => p.label).join(" › ")}
             </span>
           </p>
@@ -305,7 +305,7 @@ export function TestedCheck({
   return (
     <div className="space-y-2">
       {(["problem", "method", "setting"] as const).map((k) => (
-        <label key={k} className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+        <label key={k} className="block text-[13px] font-medium text-neutral-500">
           {k}
           <input
             value={parts[k]}
@@ -317,7 +317,7 @@ export function TestedCheck({
                   ? "e.g. CRISPR knockout of BCL2"
                   : "e.g. venetoclax resistance in AML"
             }
-            className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[12.5px] font-normal normal-case tracking-normal text-slate-800 focus:border-neutral-900 focus:outline-none"
+            className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-[12.5px] font-normal normal-case tracking-normal text-neutral-800 focus:border-neutral-900 focus:outline-none"
           />
         </label>
       ))}
@@ -331,11 +331,11 @@ export function TestedCheck({
       >
         Check the field (about 10 s)
       </button>
-      {filled < 2 && <p className="text-[11.5px] text-slate-500">Fill in at least two parts.</p>}
+      {filled < 2 && <p className="text-[11.5px] text-neutral-500">Fill in at least two parts.</p>}
       <Status loading={loading} error={error} note="Checking each part, then reading candidate papers' sentences…" />
       {ran && data && (
         <>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-[12.5px] leading-relaxed text-slate-800">
+          <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-2.5 text-[12.5px] leading-relaxed text-neutral-800">
             {data.verdict.text}
           </div>
           {shown.map((p) => (
@@ -347,12 +347,12 @@ export function TestedCheck({
                 p.evidence && (
                   <div className="mt-1.5 space-y-1">
                     {Object.entries(p.evidence).map(([k, v]) => (
-                      <p key={k} className="text-[11.5px] text-slate-600">
+                      <p key={k} className="text-[11.5px] text-neutral-600">
                         <span className="font-semibold uppercase text-neutral-900">{k}</span> “{v.slice(0, 180)}”
                       </p>
                     ))}
                     {p.strength && (
-                      <p className="text-[11px] text-slate-400">
+                      <p className="text-[11px] text-neutral-400">
                         {p.strength === "strong" ? "strong match" : p.strength === "possible" ? "possible match" : "below the match bar"}
                       </p>
                     )}
@@ -392,7 +392,7 @@ export function ReadingList({ node, query }: { node?: TreeNode; query?: string }
         data.order.map((k) =>
           data.sections[k]?.length ? (
             <div key={k} className="space-y-1.5">
-              <p className="text-[11.5px] font-semibold text-slate-600">{SECTION_TITLE[k] || k}</p>
+              <p className="text-[11.5px] font-semibold text-neutral-600">{SECTION_TITLE[k] || k}</p>
               {data.sections[k].map((p) => (
                 <PaperRow key={p.id} paper={p} node={node} />
               ))}
@@ -400,7 +400,7 @@ export function ReadingList({ node, query }: { node?: TreeNode; query?: string }
           ) : null,
         )}
       {data && data.classics.length > 0 && (
-        <p className="text-[11.5px] text-slate-500">
+        <p className="text-[11.5px] text-neutral-500">
           Classics cited across the field: {data.classics.map((c) => c.title).slice(0, 3).join(" · ")}
         </p>
       )}
@@ -450,14 +450,14 @@ export function ReportToField({ node, parent }: { node: TreeNode; parent?: TreeN
 
   if (!topic)
     return (
-      <p className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-[12px] text-slate-500">
+      <p className="rounded-lg border border-neutral-200 bg-neutral-50 p-2.5 text-[12px] text-neutral-500">
         This idea has no clear home on the field map yet, so there is no topic to report the result to.
       </p>
     );
 
   if (node.fieldReported)
     return (
-      <p className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 p-2.5 text-[12px] text-emerald-800">
+      <p className="flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-neutral-100 p-2.5 text-[12px] text-neutral-900">
         <Check className="size-3.5" /> {REPORT[outcome!].done} on <b>{label ?? "the field map"}</b>. Every lab on the map
         can see it.
         <button onClick={() => openFieldMap(topic)} className="ml-auto shrink-0 font-medium hover:underline">
@@ -467,11 +467,11 @@ export function ReportToField({ node, parent }: { node: TreeNode; parent?: TreeN
     );
 
   return (
-    <div className="space-y-2 rounded-xl border border-indigo-200 bg-indigo-50/50 p-3">
-      <p className="flex items-center gap-1.5 text-[12.5px] font-semibold text-indigo-900">
+    <div className="space-y-2 rounded-xl border border-neutral-300 bg-neutral-100/50 p-3">
+      <p className="flex items-center gap-1.5 text-[12.5px] font-semibold text-neutral-900">
         <Megaphone className="size-3.5" /> Tell the field: {r.verb.toLowerCase()} on “{label ?? "…"}”
       </p>
-      <p className="text-[11.5px] text-indigo-900/70">
+      <p className="text-[11.5px] text-neutral-900/70">
         {outcome === "contradicted"
           ? "Other labs working here will see what failed before they repeat it."
           : "Other labs working here will see this on the field map."}{" "}
@@ -481,13 +481,13 @@ export function ReportToField({ node, parent }: { node: TreeNode; parent?: TreeN
         value={text}
         onChange={(e) => setText(e.target.value)}
         rows={4}
-        className="w-full rounded-md border border-indigo-200 bg-white px-2 py-1.5 text-[12px] focus:border-indigo-400 focus:outline-none"
+        className="w-full rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-[12px] focus:border-neutral-500 focus:outline-none"
       />
       <input
         value={who}
         onChange={(e) => setWho(e.target.value)}
         placeholder="Your name or lab"
-        className="w-full rounded-md border border-indigo-200 bg-white px-2 py-1.5 text-[12px] focus:border-indigo-400 focus:outline-none"
+        className="w-full rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-[12px] focus:border-neutral-500 focus:outline-none"
       />
       <button
         disabled={busy}
@@ -512,7 +512,7 @@ export function ReportToField({ node, parent }: { node: TreeNode; parent?: TreeN
             setBusy(false);
           }
         }}
-        className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-indigo-700 py-1.5 text-[12.5px] font-semibold text-white hover:bg-indigo-800 disabled:opacity-60"
+        className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-neutral-900 py-1.5 text-[12.5px] font-semibold text-white hover:bg-neutral-900 disabled:opacity-60"
       >
         {busy ? <Loader2 className="size-3 animate-spin" /> : <Megaphone className="size-3" />} {r.verb}
       </button>
@@ -567,7 +567,7 @@ function WatchField({ node }: { node: TreeNode }) {
   if (!node.fieldWatch)
     return (
       <div className="space-y-2">
-        <p className="text-[12px] leading-relaxed text-slate-600">
+        <p className="text-[12px] leading-relaxed text-neutral-600">
           Watch the field for this box: every new preprint that directly addresses it is collected here
           (and in the field map&apos;s alerts). Starts with matches from the last 14 days.
         </p>
@@ -584,7 +584,7 @@ function WatchField({ node }: { node: TreeNode }) {
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between text-[12px] text-slate-600">
+      <div className="flex items-center justify-between text-[12px] text-neutral-600">
         <span>
           Watching. <b>{hits?.length ?? "…"}</b> matching papers so far.
         </span>

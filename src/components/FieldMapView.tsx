@@ -4,8 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Background,
   BackgroundVariant,
-  Controls,
   Handle,
+  Panel as FlowPanel,
   Position,
   ReactFlow,
   ReactFlowProvider,
@@ -19,6 +19,9 @@ import {
   Ban,
   BellRing,
   ChevronRight,
+  CircleDot,
+  Minus,
+  Plus,
   Flame,
   Crosshair,
   GitFork,
@@ -59,10 +62,11 @@ import { useUI } from "./uiContext";
 // branches and grown topics, with the team's own ideas placed on it. Same canvas as the
 // project tree, laid out left to right so dozens of topics stay readable.
 
-const PALETTE = ["#4f46e5", "#0d9488", "#d97706", "#db2777", "#7c3aed", "#0284c7", "#16a34a", "#ea580c", "#9333ea", "#475569"];
-const COL = 290;
-const ROW = 66;
-const CARD_W = 236;
+// branches are told apart by shade, in keeping with the rest of Branchly
+const PALETTE = ["#404040", "#737373", "#525252", "#8a8a8a", "#262626", "#636363", "#9a9a9a", "#4a4a4a", "#7d7d7d", "#5c5c5c"];
+const COL = 252;
+const ROW = 100;
+const CARD_W = 210;
 
 type FieldFlowNode = Node<
   {
@@ -78,43 +82,65 @@ type FieldFlowNode = Node<
 >;
 
 function FieldNode({ data, selected }: NodeProps<FieldFlowNode>) {
-  const { item, color, team, open, hasKids, pulse, onToggle } = data;
+  const { item, team, open, hasKids, pulse, onToggle } = data;
   const sig = item.signals;
   const hot = item.depth > 1 && item.momentum >= 1.5;
+  const isRoot = item.depth === 0;
+  const isBranch = item.depth === 1;
   return (
     <div
-      style={{ width: item.depth === 0 ? 200 : CARD_W, borderLeftColor: color }}
-      className={`relative break-words rounded-lg border border-l-4 bg-white px-3 py-2 shadow-sm transition ${
-        selected ? "border-slate-900 ring-2 ring-slate-900/10" : "border-slate-200 hover:border-slate-400"
-      } ${pulse ? "animate-pulse ring-4 ring-emerald-400/60" : ""}`}
+      style={{ width: isRoot ? 188 : CARD_W }}
+      className={`group relative break-words rounded-[10px] border px-3 py-2.5 transition ${
+        isRoot ? "bg-neutral-200/80 px-4 py-3.5" : isBranch ? "bg-neutral-50" : "bg-white"
+      } ${selected ? "border-neutral-900 shadow-[0_0_0_1px_#171717]" : "border-neutral-300 hover:border-neutral-500"} ${
+        pulse ? "animate-pulse shadow-[0_0_0_4px_rgba(23,23,23,0.15)]" : ""
+      }`}
     >
       <Handle type="target" position={Position.Left} className="!opacity-0" />
       <Handle type="source" position={Position.Right} className="!opacity-0" />
-      <p className={`leading-snug text-slate-900 ${item.depth <= 1 ? "text-[13px] font-semibold" : "text-[12px] font-medium"}`}>
-        {item.label}
-      </p>
-      <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-slate-500">
-        {item.count} papers{item.depth > 0 ? ` · +${item.n7} this week` : ""}
+      <p className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-neutral-500">
+        {isRoot ? "Field" : isBranch ? (
+          <>
+            <Network className="size-3.5" /> Branch
+          </>
+        ) : (
+          <>
+            <CircleDot className="size-3.5" /> Topic
+          </>
+        )}
         {hot && (
-          <span className="flex items-center gap-0.5 font-semibold text-orange-600" title="Growing faster than the field">
+          <span className="ml-auto flex items-center gap-0.5 font-semibold text-neutral-900" title="Growing faster than the field">
             <Flame className="size-3" /> {item.momentum}×
           </span>
         )}
+      </p>
+      <p
+        className={`leading-snug text-neutral-900 ${
+          isRoot ? "text-[14px] font-semibold" : isBranch ? "text-[13px] font-semibold" : "text-[12.5px]"
+        }`}
+      >
+        {item.label}
+      </p>
+      <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 text-[11px] text-neutral-500">
+        <span>
+          <b className="font-semibold text-neutral-800">{item.count.toLocaleString()}</b> papers
+        </span>
+        {!isRoot && <span>· +{item.n7} this week</span>}
         {!!sig?.claim && (
-          <span className="flex items-center gap-0.5 font-semibold text-indigo-600" title={`${sig.claim} working on this`}>
-            <Hand className="size-3" /> {sig.claim}
+          <span className="flex items-center gap-0.5 text-neutral-700" title={`${sig.claim} working on this`}>
+            · <Hand className="size-3" /> {sig.claim}
           </span>
         )}
         {!!sig?.dead_end && (
-          <span className="flex items-center gap-0.5 font-semibold text-rose-600" title={`${sig.dead_end} marked a dead end`}>
-            <Ban className="size-3" /> {sig.dead_end}
+          <span className="flex items-center gap-0.5 text-rose-700" title={`${sig.dead_end} marked a dead end`}>
+            · <Ban className="size-3" /> {sig.dead_end}
           </span>
         )}
       </p>
       {team.length > 0 && (
         <span
           title={team.map((t) => `• ${t.title}`).join("\n")}
-          className="absolute -top-2 -right-2 flex items-center gap-0.5 rounded-full bg-indigo-600 px-1.5 py-0.5 text-[10px] font-bold text-white shadow"
+          className="absolute -right-2 -top-2 flex items-center gap-0.5 rounded-full bg-neutral-900 px-1.5 py-0.5 text-[10px] font-semibold text-white shadow-sm"
         >
           <Users className="size-2.5" /> {team.length}
         </span>
@@ -125,10 +151,10 @@ function FieldNode({ data, selected }: NodeProps<FieldFlowNode>) {
             e.stopPropagation();
             onToggle(item.id);
           }}
-          className="nodrag absolute -right-3 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm hover:text-slate-900"
+          className="nodrag absolute -right-3 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-300 bg-white text-neutral-500 shadow-sm hover:text-neutral-900"
           title={open ? "Collapse" : "Expand"}
         >
-          <ChevronRight className={`size-3.5 transition ${open ? "rotate-180" : ""}`} />
+          <ChevronRight className={`size-3 transition ${open ? "rotate-180" : ""}`} />
         </button>
       )}
     </div>
@@ -148,7 +174,7 @@ export function FieldMapView() {
 function FieldMap() {
   const { state, dispatch } = useStore();
   const { fieldFocus } = useUI();
-  const { setCenter, fitView } = useReactFlow();
+  const { setCenter, fitView, zoomIn, zoomOut } = useReactFlow();
   const [root, setRoot] = useState<FieldItem | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<Set<string>>(new Set(["root"]));
@@ -305,6 +331,9 @@ function FieldMap() {
     const nodes: FieldFlowNode[] = [];
     const edges: Edge[] = [];
     if (!root) return { nodes, edges };
+    // the selected topic and everything above it
+    const onPath = new Set<string>();
+    for (let cur: string | undefined = selected ?? undefined; cur; cur = parentOf.get(cur)) onPath.add(cur);
     let nextY = 0;
     const place = (item: FieldItem, depth: number): number => {
       const kids = open.has(item.id) ? item.children ?? [] : [];
@@ -340,13 +369,14 @@ function FieldMap() {
           target: k.id,
           type: "smoothstep",
           selectable: false,
-          style: { stroke: colorOf.get(k.branch ?? k.id) ?? "#94a3b8", strokeOpacity: 0.45, strokeWidth: 1.6 },
+          // gray lines; the path down to the selected topic is dark, as in the hypothesis tree
+          style: onPath.has(k.id) ? { stroke: "#262626", strokeWidth: 2.4 } : { stroke: "#b8b8b8", strokeWidth: 1.6 },
         });
       return y;
     };
     place(root, 0);
     return { nodes, edges };
-  }, [root, open, selected, teamAt, colorOf, toggle, pulse]);
+  }, [root, open, selected, teamAt, colorOf, toggle, pulse, parentOf]);
 
   const nav: FieldNav = useMemo(
     () => ({
@@ -418,7 +448,7 @@ function FieldMap() {
   return (
     <FieldNavContext.Provider value={nav}>
     <div className="flex min-h-0 flex-1">
-      <div className="relative min-w-0 flex-1 bg-[#fafbfc]">
+      <div className="relative min-w-0 flex-1 bg-[#f6f6f4]">
         {canvas === "lineage" && lineageTarget ? (
           <FieldLineage
             target={lineageTarget}
@@ -427,7 +457,7 @@ function FieldMap() {
             focusPaper={side?.kind === "paper" ? side.id : null}
           />
         ) : !root ? (
-          <div className="flex h-full items-center justify-center gap-2 text-[13px] text-slate-500">
+          <div className="flex h-full items-center justify-center gap-2 text-[13px] text-neutral-500">
             <Loader2 className="size-4 animate-spin" /> Loading the field map…
           </div>
         ) : (
@@ -451,13 +481,21 @@ function FieldMap() {
             fitView
             fitViewOptions={{ padding: 0.12, maxZoom: 1 }}
           >
-            <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="#d4d8e0" />
-            <Controls position="bottom-left" showInteractive={false} />
+            <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="#d9d9d6" />
+            <FlowPanel position="bottom-left" className="!m-5 flex flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm">
+              <button onClick={() => zoomIn({ duration: 200 })} title="Zoom in" className="flex size-8 items-center justify-center text-neutral-700 hover:bg-neutral-100">
+                <Plus className="size-4" />
+              </button>
+              <span className="h-px bg-neutral-200" />
+              <button onClick={() => zoomOut({ duration: 200 })} title="Zoom out" className="flex size-8 items-center justify-center text-neutral-700 hover:bg-neutral-100">
+                <Minus className="size-4" />
+              </button>
+            </FlowPanel>
           </ReactFlow>
         )}
-        <div className="absolute left-4 right-4 top-4 z-10 flex flex-wrap items-start gap-2">
-          <div className="flex w-[min(560px,100%)] items-center gap-1 rounded-xl border border-slate-200 bg-white/95 p-1.5 shadow-sm backdrop-blur">
-            <div className="flex shrink-0 rounded-lg bg-slate-100 p-0.5 text-[11.5px] font-medium">
+        <div className="absolute left-5 right-5 top-5 z-10 flex flex-wrap items-start gap-2">
+          <div className="flex w-[min(560px,100%)] items-center gap-1 rounded-xl border border-neutral-300 bg-white p-1.5 shadow-[0_4px_20px_rgba(0,0,0,0.05)] focus-within:border-neutral-900">
+            <div className="flex shrink-0 rounded-lg bg-neutral-100 p-0.5 text-[12px] font-medium">
               {(
                 [
                   ["idea", "Idea"],
@@ -470,7 +508,7 @@ function FieldMap() {
                     setMode(m);
                     if (m === "parts") setSide({ kind: "combo" });
                   }}
-                  className={`rounded-md px-2 py-1 ${mode === m ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
+                  className={`rounded-md px-2 py-1 ${mode === m ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-800"}`}
                 >
                   {l}
                 </button>
@@ -478,26 +516,26 @@ function FieldMap() {
             </div>
             {mode === "idea" ? (
               <form onSubmit={locate} className="flex min-w-0 flex-1 items-center gap-1.5">
-                <Search className="ml-1 size-4 shrink-0 text-slate-400" />
+                <Search className="ml-1 size-4 shrink-0 text-neutral-400" />
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Describe an idea: where it sits, what's closest, what to read"
                   className="min-w-0 flex-1 bg-transparent text-[13px] focus:outline-none"
                 />
-                <button className="rounded-lg bg-slate-900 px-3 py-1 text-[12.5px] font-medium text-white hover:bg-slate-800">
+                <button className="rounded-lg bg-neutral-900 px-3.5 py-1.5 text-[12.5px] font-semibold text-white hover:bg-neutral-700">
                   {searching ? <Loader2 className="size-3.5 animate-spin" /> : "Locate"}
                 </button>
               </form>
             ) : (
-              <p className="min-w-0 flex-1 px-2 text-[12px] text-slate-500">Fill in the parts in the panel on the right →</p>
+              <p className="min-w-0 flex-1 px-2 text-[12px] text-neutral-500">Fill in the parts in the panel on the right →</p>
             )}
           </div>
           <div className="ml-auto flex items-center gap-1.5">
-            <div className="flex rounded-lg border border-slate-200 bg-white/95 p-0.5 text-[12px] font-medium shadow-sm">
+            <div className="flex rounded-lg bg-neutral-100 p-0.5 text-[12.5px] font-medium">
               <button
                 onClick={() => setCanvas("topics")}
-                className={`flex items-center gap-1 rounded-md px-2 py-1 ${canvas === "topics" ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"}`}
+                className={`flex items-center gap-1 rounded-md px-2.5 py-1 ${canvas === "topics" ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-800"}`}
               >
                 <Network className="size-3.5" /> Topic tree
               </button>
@@ -507,7 +545,7 @@ function FieldMap() {
                   setCanvas("lineage");
                 }}
                 title="Citation lineage of the selected topic: who builds on whom"
-                className={`flex items-center gap-1 rounded-md px-2 py-1 ${canvas === "lineage" ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"}`}
+                className={`flex items-center gap-1 rounded-md px-2.5 py-1 ${canvas === "lineage" ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-800"}`}
               >
                 <GitFork className="size-3.5" /> Lineage
               </button>
@@ -515,17 +553,17 @@ function FieldMap() {
             <button
               onClick={() => setSide({ kind: "overview" })}
               title="Field overview: open frontiers, newest papers"
-              className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white/95 px-2 py-1.5 text-[12px] font-medium text-slate-600 shadow-sm hover:text-slate-900"
+              className="flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-3 py-[7px] text-[13px] font-medium text-neutral-800 transition hover:border-neutral-900"
             >
               <LayoutList className="size-3.5" /> Overview
             </button>
             <button
               onClick={() => setSide({ kind: "alerts" })}
-              className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white/95 px-2 py-1.5 text-[12px] font-medium text-slate-600 shadow-sm hover:text-slate-900"
+              className="flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-3 py-[7px] text-[13px] font-medium text-neutral-800 transition hover:border-neutral-900"
             >
               <BellRing className="size-3.5" /> Alerts
               {alerts.length + state.nodes.filter((n) => n.fieldWatch).length > 0 && (
-                <span className="rounded-full bg-emerald-600 px-1.5 text-[10px] font-bold text-white">
+                <span className="rounded-full bg-neutral-900 px-1.5 text-[10px] font-bold text-white">
                   {alerts.length + state.nodes.filter((n) => n.fieldWatch).length}
                 </span>
               )}
@@ -536,14 +574,14 @@ function FieldMap() {
         {canvas === "lineage" && lineageOf && (
           <button
             onClick={() => setLineageOf(null)}
-            className="absolute left-4 top-[6.25rem] z-10 rounded-lg border border-slate-200 bg-white/95 px-2 py-1 text-[11.5px] text-slate-600 shadow-sm hover:text-slate-900"
+            className="absolute left-4 top-[6.25rem] z-10 rounded-lg border border-neutral-200 bg-white/95 px-2 py-1 text-[11.5px] text-neutral-600 shadow-sm hover:text-neutral-900"
           >
             ← lineage of the selected topic instead
           </button>
         )}
         {showHomeless && homeless.length > 0 && (
-          <div className="absolute bottom-16 left-16 z-10 w-[min(420px,calc(100%-5rem))] space-y-1.5 rounded-xl border border-slate-200 bg-white/95 p-3 text-[12.5px] shadow-sm">
-            <p className="text-slate-500">
+          <div className="absolute bottom-[4.25rem] left-[4.5rem] z-10 w-[min(420px,calc(100%-5rem))] space-y-1.5 rounded-xl border border-neutral-200 bg-white/95 p-3 text-[12.5px] shadow-sm">
+            <p className="text-neutral-500">
               No topic on the map clearly matches these ideas. They may be new ground, or outside what
               the map covers. Click one to open it.
             </p>
@@ -554,7 +592,7 @@ function FieldMap() {
                   dispatch({ type: "select", id: n.id });
                   setView("project");
                 }}
-                className="block w-full rounded-md border border-slate-100 bg-slate-50 p-1.5 text-left text-slate-700 hover:border-indigo-300"
+                className="block w-full rounded-md border border-neutral-100 bg-neutral-50 p-1.5 text-left text-neutral-700 hover:border-neutral-300"
               >
                 {n.title}
               </button>
@@ -562,41 +600,41 @@ function FieldMap() {
           </div>
         )}
         {banner && (
-          <div className="absolute left-1/2 top-[6.25rem] z-20 flex -translate-x-1/2 items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12.5px] font-medium text-emerald-900 shadow-sm">
+          <div className="absolute left-1/2 top-[6.25rem] z-20 flex -translate-x-1/2 items-center gap-2 rounded-xl border border-neutral-300 bg-neutral-100 px-3 py-2 text-[12.5px] font-medium text-neutral-900 shadow-sm">
             {banner}
-            <button onClick={() => setBanner(null)} className="text-emerald-700/60 hover:text-emerald-900">
+            <button onClick={() => setBanner(null)} className="text-neutral-900/60 hover:text-neutral-900">
               <X className="size-3.5" />
             </button>
           </div>
         )}
         {canvas === "topics" && (
-        <div className="pointer-events-none absolute bottom-4 left-16 z-10 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-[11.5px] text-slate-600 shadow-sm">
+        <div className="pointer-events-none absolute bottom-5 left-[4.5rem] z-10 flex flex-wrap items-center gap-3 rounded-lg border border-neutral-200 bg-white/90 px-3 py-2 text-[11.5px] text-neutral-600 shadow-sm">
           <span className="flex items-center gap-1">
-            <span className="flex size-4 items-center justify-center rounded-full bg-indigo-600 text-[9px] font-bold text-white">2</span>
+            <span className="flex size-4 items-center justify-center rounded-full bg-neutral-900 text-[9px] font-bold text-white">2</span>
             your project&apos;s ideas here
           </span>
-          <span className="flex items-center gap-1 text-orange-600">
+          <span className="flex items-center gap-1 text-neutral-900">
             <Flame className="size-3" /> growing faster than the field
           </span>
           {homeless.length > 0 && (
             <button
               onClick={() => setShowHomeless(!showHomeless)}
-              className="pointer-events-auto text-slate-500 underline decoration-dotted hover:text-slate-800"
+              className="pointer-events-auto text-neutral-500 underline decoration-dotted hover:text-neutral-800"
             >
               {homeless.length} idea{homeless.length > 1 ? "s" : ""} with no clear home
             </button>
           )}
-          <span className="flex items-center gap-1 text-indigo-600">
+          <span className="flex items-center gap-1 text-neutral-900">
             <Hand className="size-3" /> someone is working on it
           </span>
         </div>
         )}
         {status && (
           <div
-            className="pointer-events-none absolute bottom-4 right-4 z-10 flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white/90 px-3 py-1.5 text-[11.5px] text-slate-600 shadow-sm"
+            className="pointer-events-none absolute bottom-5 right-5 z-10 flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-white/90 px-3 py-1.5 text-[11.5px] text-neutral-600 shadow-sm"
             title={status.last_error ? `Last poll error: ${status.last_error}` : undefined}
           >
-            <span className={`size-2 rounded-full ${connected && !status.last_error ? "animate-pulse bg-emerald-500" : "bg-rose-500"}`} />
+            <span className={`size-2 rounded-full ${connected && !status.last_error ? "animate-pulse bg-neutral-1000" : "bg-rose-500"}`} />
             <b>{status.papers?.toLocaleString()}</b> papers · checked {ago(status.last_poll)}
             {status.continuous ? " · new preprints every 20 min" : ""}
           </div>
@@ -731,29 +769,29 @@ function TopicPanel({
     <Panel title="Field map" icon={<Network className="size-3.5" />} onClose={onClose}>
         {error && <p className="rounded-md bg-rose-50 p-2 text-[12px] text-rose-700">{error}</p>}
         {!d && !error && (
-          <p className="flex items-center gap-1.5 text-[12px] text-slate-500">
+          <p className="flex items-center gap-1.5 text-[12px] text-neutral-500">
             <Loader2 className="size-3 animate-spin" /> Loading…
           </p>
         )}
         {d && (
           <>
             <div className="space-y-2">
-              <p className="flex flex-wrap items-center gap-1 text-[11.5px] text-slate-400">
+              <p className="flex flex-wrap items-center gap-1 text-[11.5px] text-neutral-400">
                 {d.path.map((p, i) => (
                   <span key={p.id} className="flex items-center gap-1">
                     {i > 0 && "›"}
-                    <button onClick={() => p.id !== "root" && onFocus(p.id)} className="hover:text-slate-700">
+                    <button onClick={() => p.id !== "root" && onFocus(p.id)} className="hover:text-neutral-700">
                       {p.label}
                     </button>
                   </span>
                 ))}
               </p>
-              <h2 className="text-[17px] font-semibold leading-snug text-slate-900">{d.label}</h2>
-              {d.depth === 1 && <p className="text-[12.5px] text-slate-500">{d.branch_desc}</p>}
+              <h2 className="text-[21px] font-semibold leading-[1.25] tracking-[-0.01em] text-neutral-950">{d.label}</h2>
+              {d.depth === 1 && <p className="text-[12.5px] text-neutral-500">{d.branch_desc}</p>}
               {d.keywords.length > 0 && (
                 <div className="flex flex-wrap gap-1">
                   {d.keywords.map((k) => (
-                    <span key={k} className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
+                    <span key={k} className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] text-neutral-600">
                       {k}
                     </span>
                   ))}
@@ -765,20 +803,20 @@ function TopicPanel({
                   [`+${d.n7}`, "this week"],
                   [`${d.momentum}×`, "pace vs field"],
                 ].map(([v, l]) => (
-                  <div key={l as string} className="rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-2">
-                    <p className="text-[15px] font-semibold tabular-nums text-slate-900">{v}</p>
-                    <p className="text-[10.5px] text-slate-500">{l}</p>
+                  <div key={l as string} className="rounded-lg border border-neutral-100 bg-neutral-50 px-2.5 py-2">
+                    <p className="text-[15px] font-semibold tabular-nums text-neutral-900">{v}</p>
+                    <p className="text-[10.5px] text-neutral-500">{l}</p>
                   </div>
                 ))}
-                <div className="rounded-lg border border-slate-100 bg-slate-50 px-2 py-2">
+                <div className="rounded-lg border border-neutral-100 bg-neutral-50 px-2 py-2">
                   <Sparkline weeks={d.weeks ?? []} />
-                  <p className="text-[10.5px] text-slate-500">8 weeks</p>
+                  <p className="text-[10.5px] text-neutral-500">8 weeks</p>
                 </div>
               </div>
               <div className="flex flex-col gap-1.5 pt-1">
                 <button
                   onClick={() => onLineage(d.id)}
-                  className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 py-1.5 text-[12.5px] font-semibold text-slate-700 hover:border-slate-400"
+                  className="flex items-center justify-center gap-1.5 rounded-lg border border-neutral-200 py-1.5 text-[12.5px] font-semibold text-neutral-700 hover:border-neutral-400"
                 >
                   <GitFork className="size-3.5" /> Citation lineage of this {d.depth === 1 ? "branch" : "topic"}
                 </button>
@@ -801,7 +839,7 @@ function TopicPanel({
 
             {team.length > 0 && (
               <section className="space-y-1.5">
-                <h3 className="text-[11px] font-semibold uppercase tracking-wider text-indigo-500">Your project here</h3>
+                <h3 className="text-[11px] font-semibold uppercase tracking-wider text-neutral-1000">Your project here</h3>
                 {team.map((n) => (
                   <button
                     key={n.id}
@@ -809,7 +847,7 @@ function TopicPanel({
                       dispatch({ type: "select", id: n.id });
                       setView("project");
                     }}
-                    className="block w-full rounded-lg border border-indigo-100 bg-indigo-50/60 p-2 text-left text-[12.5px] text-indigo-900 hover:border-indigo-300"
+                    className="block w-full rounded-lg border border-neutral-100 bg-neutral-100/60 p-2 text-left text-[12.5px] text-neutral-900 hover:border-neutral-300"
                   >
                     {n.title}
                   </button>
@@ -824,18 +862,18 @@ function TopicPanel({
                   <button
                     key={c.id}
                     onClick={() => onFocus(c.id)}
-                    className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-[12.5px] text-slate-700 hover:bg-slate-50"
+                    className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-[12.5px] text-neutral-700 hover:bg-neutral-50"
                   >
                     <span>{c.label}</span>
-                    <ChevronRight className="size-3.5 text-slate-400" />
+                    <ChevronRight className="size-3.5 text-neutral-400" />
                   </button>
                 ))}
               </section>
             )}
 
             <section className="space-y-1.5">
-              <h3 className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Newest papers</h3>
-              <p className="text-[11.5px] text-slate-500">
+              <h3 className="text-[13px] font-medium text-neutral-500">Newest papers</h3>
+              <p className="text-[11.5px] text-neutral-500">
                 {box ? (
                   <>
                     <b>+ Evidence</b> adds to “{box.title.slice(0, 70)}”.
@@ -860,21 +898,21 @@ function TopicPanel({
 
             {d.near.length > 0 && (
               <section className="space-y-1">
-                <h3 className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                <h3 className="text-[13px] font-medium text-neutral-500">
                   Where this touches other branches
                 </h3>
                 {d.near.map((n) => (
                   <button
                     key={n.id}
                     onClick={() => onFocus(n.id)}
-                    className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-[12.5px] text-slate-700 hover:bg-slate-50"
+                    className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-[12.5px] text-neutral-700 hover:bg-neutral-50"
                   >
                     <span>{n.label}</span>
-                    <span className="text-[11px] text-slate-400">{n.sim.toFixed(2)}</span>
+                    <span className="text-[11px] text-neutral-400">{n.sim.toFixed(2)}</span>
                   </button>
                 ))}
                 {d.bridges?.length > 0 && (
-                  <p className="px-2 text-[11.5px] text-slate-500">
+                  <p className="px-2 text-[11.5px] text-neutral-500">
                     {d.bridges.map((b) => `${b.papers} papers here also fit ${b.label}`).join(" · ")}
                   </p>
                 )}
@@ -883,16 +921,16 @@ function TopicPanel({
 
             {d.roots.length > 0 && (
               <section className="space-y-1">
-                <h3 className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Most built-on here</h3>
+                <h3 className="text-[13px] font-medium text-neutral-500">Most built-on here</h3>
                 {d.roots.map((r) => (
                   <a
                     key={r.id}
                     href={r.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block rounded-md px-2 py-1.5 text-[12.5px] text-slate-700 hover:bg-slate-50 hover:text-emerald-700"
+                    className="block rounded-md px-2 py-1.5 text-[12.5px] text-neutral-700 hover:bg-neutral-50 hover:text-neutral-900"
                   >
-                    {r.title} <span className="text-slate-400">({r.year}{r.built_on ? `, built on by ${r.built_on}` : ""})</span>
+                    {r.title} <span className="text-neutral-400">({r.year}{r.built_on ? `, built on by ${r.built_on}` : ""})</span>
                   </a>
                 ))}
               </section>
@@ -908,14 +946,14 @@ function WorkingOn() {
   const { state, dispatch } = useStore();
   const box = state.nodes.find((n) => n.id === state.selectedId);
   return (
-    <div className="pointer-events-auto absolute left-4 top-[4.25rem] z-10 hidden max-w-[460px] items-center gap-1.5 rounded-lg border border-slate-200 bg-white/95 px-2 py-1 text-[11.5px] text-slate-600 shadow-sm md:flex">
-      <Crosshair className="size-3.5 shrink-0 text-indigo-500" />
+    <div className="pointer-events-auto absolute left-4 top-[4.25rem] z-10 hidden max-w-[460px] items-center gap-1.5 rounded-lg border border-neutral-200 bg-white/95 px-2 py-1 text-[11.5px] text-neutral-600 shadow-sm md:flex">
+      <Crosshair className="size-3.5 shrink-0 text-neutral-1000" />
       {box ? (
         <>
           <span className="truncate">
-            Papers go to: <b className="text-slate-800">{box.title}</b>
+            Papers go to: <b className="text-neutral-800">{box.title}</b>
           </span>
-          <button onClick={() => dispatch({ type: "select", id: null })} className="text-slate-400 hover:text-slate-800" title="Unselect">
+          <button onClick={() => dispatch({ type: "select", id: null })} className="text-neutral-400 hover:text-neutral-800" title="Unselect">
             <X className="size-3" />
           </button>
         </>
@@ -935,9 +973,9 @@ function IdeaHere({ label, onIdea }: { label: string; onIdea: (q: string) => voi
         e.preventDefault();
         if (text.trim()) onIdea(text.trim());
       }}
-      className="space-y-1.5 rounded-xl border border-indigo-200 bg-indigo-50/50 p-3"
+      className="space-y-1.5 rounded-xl border border-neutral-300 bg-neutral-100/50 p-3"
     >
-      <p className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-indigo-600">
+      <p className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-neutral-900">
         <Lightbulb className="size-3.5" /> Have an idea here?
       </p>
       <textarea
@@ -945,11 +983,11 @@ function IdeaHere({ label, onIdea }: { label: string; onIdea: (q: string) => voi
         onChange={(e) => setText(e.target.value)}
         rows={2}
         placeholder={`A hypothesis in ${label}…`}
-        className="w-full rounded-md border border-indigo-200 bg-white px-2 py-1.5 text-[12.5px] focus:border-indigo-400 focus:outline-none"
+        className="w-full rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-[12.5px] focus:border-neutral-500 focus:outline-none"
       />
       <button
         disabled={!text.trim()}
-        className="w-full rounded-lg bg-indigo-700 py-1.5 text-[12px] font-semibold text-white hover:bg-indigo-800 disabled:opacity-50"
+        className="w-full rounded-lg bg-neutral-900 py-1.5 text-[12px] font-semibold text-white hover:bg-neutral-900 disabled:opacity-50"
       >
         Check it against the field, then start a tree
       </button>

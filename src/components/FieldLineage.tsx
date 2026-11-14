@@ -64,14 +64,14 @@ function PaperCard({ data }: NodeProps<PaperNode>) {
       onClick={() => onOpen(p.id)}
       style={{ width: CARD_W, height: CARD_H, borderLeftColor: color }}
       title={p.title}
-      className={`block overflow-hidden rounded-md border border-l-4 px-2 py-1 text-left shadow-sm transition hover:border-slate-500 ${
-        p.inside ? "bg-white" : "border-dashed bg-slate-50 opacity-75"
-      } ${focus ? "ring-2 ring-indigo-500" : "border-slate-200"}`}
+      className={`block overflow-hidden rounded-md border border-l-4 px-2 py-1 text-left shadow-sm transition hover:border-neutral-500 ${
+        p.inside ? "bg-white" : "border-dashed bg-neutral-50 opacity-75"
+      } ${focus ? "ring-2 ring-neutral-1000" : "border-neutral-200"}`}
     >
       <Handle type="source" position={Position.Left} className="!opacity-0" />
       <Handle type="target" position={Position.Right} className="!opacity-0" />
-      <p className="line-clamp-2 text-[10.5px] font-medium leading-tight text-slate-800">{p.title}</p>
-      <p className="text-[9.5px] text-slate-400">
+      <p className="line-clamp-2 text-[10.5px] font-medium leading-tight text-neutral-800">{p.title}</p>
+      <p className="text-[9.5px] text-neutral-400">
         {new Date(p.announced * 1000).getFullYear()}
         {p.built_on ? ` · built on by ${p.built_on}` : ""}
       </p>
@@ -81,9 +81,9 @@ function PaperCard({ data }: NodeProps<PaperNode>) {
 
 function LaneLabel({ data }: NodeProps<LaneNode>) {
   return (
-    <div className={`w-[190px] ${data.right ? "text-left" : "text-right"} text-[11.5px] leading-tight ${data.inside ? "font-semibold text-slate-700" : "text-slate-400"}`}>
+    <div className={`w-[190px] ${data.right ? "text-left" : "text-right"} text-[11.5px] leading-tight ${data.inside ? "font-semibold text-neutral-700" : "text-neutral-400"}`}>
       {data.label}
-      <span className="block text-[10px] font-normal text-slate-400">
+      <span className="block text-[10px] font-normal text-neutral-400">
         {data.count} paper{data.count > 1 ? "s" : ""}
         {data.inside ? "" : " · other topic"}
       </span>
@@ -92,7 +92,7 @@ function LaneLabel({ data }: NodeProps<LaneNode>) {
 }
 
 function Tick({ data }: NodeProps<TickNode>) {
-  return <div className="text-[11px] font-semibold text-slate-400">{data.label}</div>;
+  return <div className="text-[11px] font-semibold text-neutral-400">{data.label}</div>;
 }
 
 const nodeTypes = { paper: PaperCard, lane: LaneLabel, tick: Tick };
@@ -227,7 +227,7 @@ function LineageGraph({
         target: e.t,
         selectable: false,
         style: {
-          stroke: touchesFocus ? "#4f46e5" : e.main ? "#6366f1" : "#94a3b8",
+          stroke: touchesFocus ? "#171717" : e.main ? "#525252" : "#94a3b8",
           strokeOpacity: touchesFocus ? 0.9 : e.main ? 0.55 : 0.25,
           strokeWidth: touchesFocus ? 1.8 : 1.2,
         },
@@ -257,13 +257,13 @@ function LineageGraph({
     );
   if (!d)
     return (
-      <div className="flex h-full items-center justify-center gap-2 text-[13px] text-slate-500">
+      <div className="flex h-full items-center justify-center gap-2 text-[13px] text-neutral-500">
         <Loader2 className="size-4 animate-spin" /> Tracing the citation lineage…
       </div>
     );
   if (!d.nodes.length)
     return (
-      <div className="flex h-full items-center justify-center p-8 text-[13px] text-slate-500">
+      <div className="flex h-full items-center justify-center p-8 text-[13px] text-neutral-500">
         No citation links known here yet. References load in the background as papers arrive.
       </div>
     );
@@ -284,8 +284,8 @@ function LineageGraph({
         <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="#d4d8e0" />
         <Controls position="bottom-left" showInteractive={false} />
       </ReactFlow>
-      <div className="pointer-events-none absolute bottom-4 left-16 z-10 max-w-[560px] rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-[11.5px] leading-relaxed text-slate-600 shadow-sm">
-        <b className="text-slate-800">
+      <div className="pointer-events-none absolute bottom-4 left-16 z-10 max-w-[560px] rounded-xl border border-neutral-200 bg-white/90 px-3 py-2 text-[11.5px] leading-relaxed text-neutral-600 shadow-sm">
+        <b className="text-neutral-800">
           {target.kind === "paper" ? `Lineage of “${d.paper?.title.slice(0, 80) ?? "this paper"}”` : `Lineage of ${d.label ?? "this topic"}`}
         </b>
         <br />
@@ -293,7 +293,7 @@ function LineageGraph({
         lanes are other topics this lineage is intertwined with. Showing each paper&apos;s main line of descent;
         click a paper for all its links.
         {d.coverage && ` References known for ${d.coverage.with_references} of ${d.coverage.papers} papers here.`}
-        <label className="pointer-events-auto mt-1 flex items-center gap-1.5 text-slate-700">
+        <label className="pointer-events-auto mt-1 flex items-center gap-1.5 text-neutral-700">
           <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} /> show every
           citation ({d.edges.length})
         </label>
