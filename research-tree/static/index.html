@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Research Tree · LLM Agents</title>
+<title>Research Tree</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
@@ -147,7 +147,7 @@ pre { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; 
 </head>
 <body>
 <header>
-  <div class="brand">Research Tree <span>/ LLM Agents</span></div>
+  <div class="brand">Research Tree <span id="fieldname"></span></div>
   <div class="live" id="live"><div class="dot" id="dot"></div><span id="livetext">connecting…</span></div>
   <button class="btn" id="myalerts" title="Your alerts on this browser">My alerts <span id="alertbadge" class="badge" style="display:none"></span></button>
   <form class="locate" id="locate">
@@ -367,8 +367,8 @@ async function showOverview() {
     <div class="near" data-id="${b.id}"><span class="nl"><i style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${branchColor[b.id]};margin-right:7px"></i>${esc(b.label)}</span>
     <span class="nb">${b.count} · +${b.n7}/wk · ${b.momentum}×</span></div>`).join("");
   document.getElementById("panelbody").innerHTML = `
-    <h2>LLM Agents frontier map</h2>
-    <div class="note">${TREE.count.toLocaleString()} papers from arXiv, organised into ${TREE.children.length} curated branches and ${leaves.length} automatically grown topics. New papers are placed on the tree the moment arXiv makes them public.</div>
+    <h2>${esc(TREE.label)} frontier map</h2>
+    <div class="note">${TREE.count.toLocaleString()} papers (${esc(STATUS.coverage || "")}), organised into ${TREE.children.length} curated branches and ${leaves.length} automatically grown topics. New papers are placed on the tree as soon as they are public.</div>
     <h3>Just in</h3><div id="feed">${feedHTML()}</div>
     <h3>Open frontiers</h3>
     <div class="note" style="margin-bottom:8px">Ranked by recent activity × acceleration, discounted for claims and dead-end marks.</div>
@@ -389,7 +389,7 @@ function feedHTML() {
     const seen = new Set();
     items = tips.filter(t => t.announced === tips[0].announced && !seen.has(t.branch) && seen.add(t.branch)).slice(0, 6);
   }
-  return items.map(p => paperHTML(p, false, true)).join("") || `<div class="note">Waiting for the next arXiv announcement…</div>`;
+  return items.map(p => paperHTML(p, false, true)).join("") || `<div class="note">Waiting for new papers…</div>`;
 }
 
 function exploredHTML(p) {
@@ -398,7 +398,7 @@ function exploredHTML(p) {
 }
 function paperHTML(p, withAbs = true, withWhere = false) {
   const leaf = withWhere && p.node ? findLeaf(p.node) : null;
-  const live = ["listing", "api", "rss"].includes(p.source);   // only papers caught by the live poller
+  const live = ["listing", "api", "rss", "biorxiv"].includes(p.source);   // only papers caught by the live poller
   const lag = live && p.first_seen ? ` · caught ${dur(Math.max(0, p.first_seen - p.announced))} after release` : "";
   return `<div class="paper">
     <a class="t" href="${p.url}" target="_blank" rel="noopener">${esc(p.title)}</a>
@@ -469,7 +469,7 @@ async function showNode(id) {
       ${d.near.map(n => `<div class="near" data-id="${n.id}"><span class="nl">${esc(n.label)}</span><span class="nb">${esc(labelBranch(n.branch))} · ${n.sim.toFixed(2)}</span></div>`).join("")}
       ${d.bridges.length ? `<div class="note" style="margin-top:6px">${d.bridges.map(b => `${b.papers} papers here also fit <b>${esc(b.label)}</b>`).join(" · ")}</div>` : ""}` : ""}
 
-    ${d.roots.length ? `<h3>Lineage of this branch</h3>${d.roots.map(r => `<div class="paper"><a class="t" href="https://arxiv.org/abs/${r.id}" target="_blank">${esc(r.title)}</a><div class="meta">${r.year} · landmark</div></div>`).join("")}` : ""}
+    ${d.roots.length ? `<h3>Lineage of this branch</h3>${d.roots.map(r => `<div class="paper"><a class="t" href="${r.url || "https://arxiv.org/abs/" + r.id}" target="_blank">${esc(r.title)}</a><div class="meta">${r.year} · ${r.built_on ? `built on by ${r.built_on} in the tree` : "landmark"}</div></div>`).join("")}` : ""}
 
     <h3>For agents</h3>
     <pre>curl -s localhost:${location.port}/api/node/${d.id}
@@ -558,7 +558,7 @@ function myAlerts() { try { return JSON.parse(localStorage.getItem(ALERT_KEY) ||
 function saveAlerts(a) { try { localStorage.setItem(ALERT_KEY, JSON.stringify(a)); } catch {} }
 function alertBoxHTML(kind) {
   return `<div class="alertbox" id="alertbox">
-    <div class="note">${kind === "idea" ? "We'll check every new arXiv release and keep papers that directly address this idea." : "We'll collect every new paper that lands in this topic."}
+    <div class="note">${kind === "idea" ? "We'll check every new paper and keep the ones that directly address this idea." : "We'll collect every new paper that lands in this topic."}
       You get a private feed link (any RSS reader); optionally also post to a Slack or Discord channel.</div>
     <input id="alertwebhook" placeholder="Optional: Slack or Discord webhook URL">
     <button class="btn primary" id="alertcreate">Create alert</button>
@@ -724,7 +724,10 @@ function liveText() {
   const next = STATUS.next_announcement - now;
   const lag = STATUS.median_lag_s != null ? ` · median catch time <b>${dur(STATUS.median_lag_s)}</b>` : "";
   document.getElementById("livetext").innerHTML =
-    `<b>${STATUS.papers.toLocaleString()}</b> papers · ${polled}${STATUS.hot_window ? " · <b>watching the release window</b>" : ""} · next arXiv release in <b>${dur(next)}</b>${lag}`;
+    `<b>${STATUS.papers.toLocaleString()}</b> papers · ${polled}${STATUS.hot_window ? " · <b>watching the release window</b>" : ""}` +
+    (STATUS.continuous ? ` · new preprints are checked every 20 min` : ` · next arXiv release in <b>${dur(next)}</b>`) + lag;
+  document.getElementById("fieldname").textContent = STATUS.field ? "/ " + STATUS.field : "";
+  document.title = "Research Tree · " + (STATUS.field || "");
   document.getElementById("dot").classList.toggle("err", !!STATUS.last_error);
 }
 setInterval(liveText, 1000);
@@ -801,7 +804,7 @@ async function showPaperLineage(pid) {
   setView("lineage");
   drawLineage(d.nodes, d.edges, pid);
   const p = d.paper;
-  const src = { s2: "Semantic Scholar", html: "arXiv HTML (day-0 parse)" }[d.refs_source];
+  const src = { s2: "Semantic Scholar", html: "the paper's full text (day-0 parse)" }[d.refs_source];
   document.getElementById("panelbody").innerHTML = `
     <div class="crumbs">${d.path.map(x => `<a data-id="${x.id}">${esc(x.label)}</a>`).join(" › ")}</div>
     <h2><a href="${p.url}" target="_blank" rel="noopener" style="text-decoration:none">${esc(p.title)}</a></h2>

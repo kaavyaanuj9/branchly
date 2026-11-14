@@ -14,6 +14,7 @@ import urllib.error
 import urllib.request
 
 import ingest
+from fields import FIELD
 
 S2_BATCH = "https://api.semanticscholar.org/graph/v1/paper/batch?fields=externalIds,referenceCount,references.externalIds"
 _ARXIV_ID = re.compile(r"(?<![\d.])(\d{4}\.\d{4,5})(?:v\d+)?(?![\d])")
@@ -27,7 +28,7 @@ def _strip_version(i):
 
 # ---------------------------------------------------------------- Semantic Scholar
 def _s2_post(ids, log):
-    body = json.dumps({"ids": [f"arXiv:{i}" for i in ids]}).encode()
+    body = json.dumps({"ids": [FIELD.s2_id(i) for i in ids]}).encode()
     headers = {"Content-Type": "application/json", **ingest.UA}
     if os.environ.get("S2_API_KEY"):   # free key from semanticscholar.org/product/api: dedicated rate limit
         headers["x-api-key"] = os.environ["S2_API_KEY"]
@@ -84,8 +85,7 @@ def fetch_s2(store, ids=None, batch=100, limit=None, log=print):
                 if not refs:   # not indexed yet, withheld by publisher, or dropped by the batch
                     misses.append(pid)
                     continue
-                cited = {_strip_version(r["externalIds"]["ArXiv"]) for r in refs
-                         if r and (r.get("externalIds") or {}).get("ArXiv")}
+                cited = {k for k in (FIELD.ref_key((r or {}).get("externalIds")) for r in refs) if k}
                 store.set_refs(pid, cited, "s2", item.get("referenceCount") or len(refs))
                 got += 1
             if (k // size) % 10 == 9 or k + size >= len(chunk_ids):
@@ -98,6 +98,63 @@ def fetch_s2(store, ids=None, batch=100, limit=None, log=print):
         misses = run(misses, 25, final=True)
         store.mark_refs_missing(misses)
     return got
+
+
+# ---------------------------------------------------------------- foundations (biology)
+S2_META = ("https://api.semanticscholar.org/graph/v1/paper/batch?"
+           "fields=title,abstract,year,venue,publicationDate,externalIds,authors")
+
+
+def fetch_foundations(store, min_cites=2, limit=60000, log=print):
+    """Published papers the corpus's own papers cite at least `min_cites` times, added to the
+    corpus with abstracts as source "foundation". Only citations from non-foundation papers
+    count, so the corpus doesn't snowball outward through citations of citations."""
+    have = {r[0] for r in store.conn.execute("SELECT id FROM papers")}
+    counts = {}
+    for cited, n in store.conn.execute(
+            "SELECT r.cited, COUNT(*) FROM refs r JOIN papers p ON p.id = r.citing "
+            "WHERE p.source != 'foundation' GROUP BY r.cited"):
+        if cited not in have and n >= min_cites:
+            counts[cited] = n
+    todo = sorted(counts, key=lambda c: -counts[c])[:limit]
+    log(f"{len(todo)} cited papers qualify as foundations (cited >= {min_cites} times)")
+    added = 0
+    for k in range(0, len(todo), 100):
+        chunk = todo[k:k + 100]
+        body = json.dumps({"ids": [FIELD.s2_id(i) for i in chunk]}).encode()
+        headers = {"Content-Type": "application/json", **ingest.UA}
+        if os.environ.get("S2_API_KEY"):
+            headers["x-api-key"] = os.environ["S2_API_KEY"]
+        res = None
+        for attempt in range(8):
+            try:
+                req = urllib.request.Request(S2_META, data=body, headers=headers)
+                with urllib.request.urlopen(req, timeout=120) as r:
+                    res = json.loads(r.read())
+                break
+            except urllib.error.HTTPError as ex:
+                if ex.code in (429, 500, 502, 503, 504):
+                    time.sleep(min(120, 5 * 2 ** attempt))
+                    continue
+                log(f"  Semantic Scholar refused a foundations batch ({ex.code}); skipping it")
+                break
+        papers = []
+        for pid, item in zip(chunk, res or []):
+            if not item or not item.get("title") or not item.get("abstract"):
+                continue                       # no abstract: can't be searched or placed
+            when = item.get("publicationDate") or (f"{item['year']}-07-01" if item.get("year") else None)
+            if not when:
+                continue
+            ts = time.mktime(time.strptime(when, "%Y-%m-%d"))
+            papers.append({"id": pid, "version": 1, "title": item["title"], "abstract": item["abstract"],
+                           "authors": [a.get("name", "") for a in item.get("authors") or []][:20],
+                           "categories": [item.get("venue") or "journal"],
+                           "published": ts, "updated": ts, "announced": ts})
+        added += store.add_papers(papers, "foundation")
+        if (k // 100) % 10 == 9 or k + 100 >= len(todo):
+            log(f"  {min(k + 100, len(todo))}/{len(todo)} looked up, {added} added")
+        time.sleep(1.1)
+    return added
 
 
 # ---------------------------------------------------------------- arXiv HTML (day 0)

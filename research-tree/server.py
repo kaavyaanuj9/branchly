@@ -1,6 +1,7 @@
 """HTTP server: web UI, JSON API for humans and agents, and a live event stream.
 
-    python3 server.py            # backfills + grows the tree on first run, then polls arXiv
+    python3 server.py                          # LLM agents (arXiv), port 8765
+    RT_FIELD=cancer_cell_bio python3 server.py # cancer & cell biology (bioRxiv), port 8766
 """
 import hmac
 import json
@@ -71,7 +72,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         u = urllib.parse.urlparse(self.path)
         q = {k: v[-1] for k, v in urllib.parse.parse_qs(u.query).items()}
-        parts = [p for p in u.path.split("/") if p]
+        parts = [urllib.parse.unquote(p) for p in u.path.split("/") if p]   # ids may be DOIs (contain "/")
         try:
             if u.path in ("/", "/index.html"):
                 return self._file("index.html", "text/html")
@@ -136,7 +137,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send(500, {"error": str(ex)})
 
     def do_POST(self):
-        parts = [p for p in urllib.parse.urlparse(self.path).path.split("/") if p]
+        parts = [urllib.parse.unquote(p) for p in urllib.parse.urlparse(self.path).path.split("/") if p]
         try:
             n = int(self.headers.get("Content-Length") or 0)
             body = json.loads(self.rfile.read(n) or b"{}")

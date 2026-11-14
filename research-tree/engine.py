@@ -12,12 +12,14 @@ import numpy as np
 import alerts
 import config
 import embeddings
-import ingest
 import refs
+import source as ingest          # the field's literature source (arXiv or bioRxiv)
+from fields import FIELD
 from model import TreeModel
 from store import Store
 
 DAY = 86400.0
+LIVE_SOURCES = {"listing", "api", "rss", "biorxiv"}   # caught by the poller (catch time is meaningful)
 
 
 def _idea_text(p):
@@ -47,7 +49,7 @@ class Engine:
     # ------------------------------------------------------------ build / load
     def ensure_built(self):
         if self.store.count() == 0:
-            self.log(f"Backfilling the last {config.BACKFILL_DAYS} days of LLM-agent papers from arXiv…")
+            self.log(f"Backfilling the last {config.BACKFILL_DAYS} days of {config.FIELD_NAME} papers…")
             papers = ingest.backfill(log=self.log)
             n = self.store.add_papers(papers, "backfill")
             self.log(f"  stored {n} papers")
@@ -222,9 +224,15 @@ class Engine:
 
     def _search_space(self, method):
         """(matrix, ordered ids) for a search method; neural only once every paper is embedded."""
-        if method != "lsa" and self.E is not None and len(self.E_row) >= len(self.papers):
-            ids = sorted(self.E_row, key=self.E_row.get)
-            return "neural", self.E, ids
+        if method != "lsa" and self.E is not None and all(p in self.E_row for p in self.papers):
+            key = (len(self.E_row), len(self.papers))
+            if getattr(self, "_space_key", None) != key:
+                # only vectors of papers the tree knows (the cache can hold extras, e.g. papers
+                # embedded by another process or later removed)
+                ids = [p for p in sorted(self.E_row, key=self.E_row.get) if p in self.papers]
+                self._space = (self.E[[self.E_row[p] for p in ids]], ids)
+                self._space_key = key
+            return ("neural",) + self._space
         return "lsa", self.X, self.order
 
     def _query_vec(self, method, text):
@@ -270,11 +278,11 @@ class Engine:
         return int(np.searchsorted(np.array(c), sim))
 
     def _fetch_html_refs(self, ids):
-        """Day-0 references for brand-new papers, parsed from arXiv's HTML."""
+        """Day-0 references for brand-new papers (arXiv HTML or bioRxiv JATS XML)."""
         found = 0
         for pid in ids:
             try:
-                res = refs.html_refs(pid, self.titles)
+                res = ingest.day0_refs(pid, self.titles)
             except Exception as ex:
                 self.log(f"  html refs {pid}: {ex}")
                 res = None
@@ -314,7 +322,7 @@ class Engine:
         for p, src in found:
             p["announced"] = min(p["announced"], now)
             fresh.append((p, src))
-        for src in ("listing", "api", "rss"):
+        for src in ("listing", "api", "rss", "biorxiv"):
             batch = [p for p, s in fresh if s == src]
             if batch:
                 self.store.add_papers(batch, src)
@@ -348,7 +356,7 @@ class Engine:
                 last_s2 = time.time()
                 threading.Thread(target=self._refresh_s2, daemon=True).start()
             hot = ingest.in_hot_window()
-            time.sleep(config.HOT_POLL_SECONDS if hot else config.POLL_SECONDS)
+            time.sleep(config.HOT_POLL_SECONDS if hot else ingest.POLL_SECONDS)
 
     # ------------------------------------------------------------ events
     def subscribe(self):
@@ -372,7 +380,7 @@ class Engine:
         p = self.papers[pid]
         c = {"id": pid, "title": p["title"], "authors": p["authors"][:4] + (["et al."] if len(p["authors"]) > 4 else []),
              "announced": p["announced"], "first_seen": p["first_seen"], "source": p["source"],
-             "node": p.get("node"), "branch": p.get("branch"), "url": f"https://arxiv.org/abs/{pid}",
+             "node": p.get("node"), "branch": p.get("branch"), "url": FIELD.paper_url(pid),
              "bridge": self.model.bridges.get(pid),
              # neutral "explored" indicator: how many papers in the tree build on this one
              "built_on": len(self.cited_by.get(pid, ())), "builds_on": len(self.cites.get(pid, ())),
@@ -434,7 +442,7 @@ class Engine:
                 return d
 
             kids = [build(b["id"]) for b in config.BRANCHES]
-            return {"id": "root", "label": "LLM Agents", "depth": 0, "children": kids,
+            return {"id": "root", "label": config.FIELD_NAME, "depth": 0, "children": kids,
                     "count": len(self.papers), "status": self.status_json()}
 
     @staticmethod
@@ -453,7 +461,7 @@ class Engine:
             n = self.model.nodes[nid]
             out.append({"id": nid, "label": n["label"]})
             nid = n["parent"]
-        return [{"id": "root", "label": "LLM Agents"}] + out[::-1]
+        return [{"id": "root", "label": config.FIELD_NAME}] + out[::-1]
 
     def node_json(self, nid, limit=60):
         with self.lock:
@@ -487,8 +495,17 @@ class Engine:
                           "sim": round(s, 3)} for s, oid in near[:4]],
                 "bridges": [{"branch": b, "label": self._branch_label(b), "papers": k}
                             for b, k in bridge_counts.most_common(3)],
-                "roots": [self.roots[r] for r in branch["roots"] if r in self.roots],
+                "roots": ([self.roots[r] for r in branch["roots"] if r in self.roots] if branch["roots"]
+                          else self._derived_landmarks(n["branch"])),
             }
+
+    def _derived_landmarks(self, bid, k=4):
+        """No hand-picked landmarks: the branch's most built-on papers stand in for them."""
+        ids = [p for p, d in self.papers.items() if d.get("branch") == bid]
+        top = sorted(ids, key=lambda p: -len(self.cited_by.get(p, ())))[:k]
+        return [{"id": p, "title": self.papers[p]["title"], "year": time.gmtime(self.papers[p]["announced"]).tm_year,
+                 "url": FIELD.paper_url(p), "built_on": len(self.cited_by.get(p, ()))}
+                for p in top if self.cited_by.get(p)]
 
     def _branch_label(self, bid):
         return next(b["label"] for b in config.BRANCHES if b["id"] == bid)
@@ -570,8 +587,7 @@ class Engine:
             "related": (f"Related work exists: {n} this idea. " if n else "Related work exists. ")
                        + "Position against the top matches; the gap may be in the combination.",
             "sparse": (f"Sparse: {n} this idea. " if n else "Unusually far from everything in the tree. ")
-                      + "Possibly open ground, or outside what the tree covers (LLM-agent papers on arXiv "
-                        "since Oct 2022); check other literature.",
+                      + "Possibly open ground, or outside what the tree covers (" + config.COVERAGE + "); check other literature.",
         }[level]
         return {"branch": bid, "node": nid, "path": self.path(nid), "method": name,
                 "placement_confidence": confidence,
@@ -791,7 +807,7 @@ class Engine:
         else:
             missing = [k for k in keys if singles[k]["count"] == 0]
             verdict = ("unstudied_part", f"Nothing in the tree clearly matches your {' and '.join(missing)}: "
-                       "possibly new, possibly outside what the tree covers (LLM-agent papers on arXiv).")
+                       "possibly new, possibly outside what the tree covers (" + config.COVERAGE + ").")
         return {"parts": parts, "thresholds": {"possible": r_pos, "strong": r_str, "shortlist": self.SHORTLIST},
                 "singles": singles, "combos": combos, "verdict": {"kind": verdict[0], "text": verdict[1]}}
 
@@ -916,10 +932,11 @@ class Engine:
         last = ingest.last_announcement()
         now = time.time()
         latest = [p for p in self.papers.values() if p["announced"] >= last.timestamp() - 60] if hasattr(self, "papers") else []
-        live = [p for p in latest if p["source"] != "backfill"]
+        live = [p for p in latest if p["source"] in LIVE_SOURCES]
         lag = sorted(p["first_seen"] - p["announced"] for p in live)
         return {**self.status, "papers": len(getattr(self, "papers", {})),
                 "next_announcement": nxt.timestamp(), "last_announcement": last.timestamp(),
                 "in_latest_announcement": len(latest), "hot_window": ingest.in_hot_window(),
                 "median_lag_s": lag[len(lag) // 2] if lag else None,
-                "built_at": self.store.get_meta("built_at"), "now": now}
+                "built_at": self.store.get_meta("built_at"), "now": now,
+                "field": config.FIELD_NAME, "coverage": config.COVERAGE, "continuous": ingest.CONTINUOUS}

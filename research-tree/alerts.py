@@ -22,6 +22,8 @@ from xml.sax.saxutils import escape
 
 import numpy as np
 
+from fields import FIELD
+
 DAY = 86400.0
 WEBHOOK_HOSTS = {"hooks.slack.com": "slack", "discord.com": "discord", "discordapp.com": "discord"}
 RELEVANT = 0.0           # reranker score above which a paper "directly addresses" the idea
@@ -134,7 +136,7 @@ class Alerts:
         lines = []
         for pid, _, reason in hits[:10]:
             title = self.e.papers[pid]["title"]
-            url = f"https://arxiv.org/abs/{pid}"
+            url = FIELD.paper_url(pid)
             lines.append(f"• <{url}|{title}>" if kind == "slack" else f"• [{title}](<{url}>)")
         more = f"\n…and {len(hits) - 10} more" if len(hits) > 10 else ""
         head = f"*{len(hits)} new paper{'s' if len(hits) > 1 else ''}* for your alert “{w['label']}”"

@@ -5,12 +5,15 @@
     python3 build.py --print      # show the tree
     python3 build.py --history    # add papers back to Oct 2022 (resumable), then fetch references
     python3 build.py --refs       # fetch missing references from Semantic Scholar
-    python3 build.py --html-refs  # parse references from arXiv HTML for papers that still have none
+    python3 build.py --html-refs  # day-0 reference parser (arXiv HTML / bioRxiv JATS) for papers with none
+    python3 build.py --foundations  # biology: add the published papers the preprints cite (>= 2 times)
+
+Select the field with RT_FIELD (default llm_agents), e.g. RT_FIELD=cancer_cell_bio.
 """
 import sys
 import time
 
-import ingest
+import source as ingest          # the field's literature source (arXiv or bioRxiv)
 
 from engine import Engine
 
@@ -49,7 +52,7 @@ def html_refs(store):
     print(f"{len(todo)} papers without references", flush=True)
     found = 0
     for n, pid in enumerate(todo, 1):
-        while True:   # quiet window: 30 min before to 90 min after a release
+        while not ingest.CONTINUOUS:   # scheduled sources: stay quiet 30 min before to 90 min after a release
             now = datetime.now(timezone.utc)
             to_next = (ingest.next_announcement(now) - now).total_seconds() / 60
             since_last = (now - ingest.last_announcement(now)).total_seconds() / 60
@@ -58,7 +61,7 @@ def html_refs(store):
             print(f"  paused for the arXiv release window ({n - 1}/{len(todo)} done)", flush=True)
             time.sleep(300)
         try:
-            res = refs.html_refs(pid, titles)
+            res = ingest.day0_refs(pid, titles)
         except Exception as ex:
             print(f"  {pid}: {ex}", flush=True)
             continue
@@ -75,6 +78,13 @@ def html_refs(store):
 
 
 if __name__ == "__main__":
+    if "--foundations" in sys.argv:
+        import refs
+        from fields import FIELD
+        from store import Store
+        refs.fetch_foundations(Store(), min_cites=getattr(FIELD, "FOUNDATION_MIN_CITES", 2),
+                               log=lambda m: print(m, flush=True))
+        sys.exit(0)
     if "--html-refs" in sys.argv:
         from store import Store
         html_refs(Store())
