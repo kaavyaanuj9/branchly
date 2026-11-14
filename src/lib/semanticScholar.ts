@@ -1,13 +1,10 @@
 import type { SemanticScholarPaper } from "./types";
 
-const S2_API_URL = "https://api.semanticscholar.org/graph/v1/paper/search";
+const S2_BULK_SEARCH_URL = "https://api.semanticscholar.org/graph/v1/paper/search/bulk";
 
-export interface SemanticScholarSearchResult {
-  total: number;
-  offset: number;
-  next?: number;
-  data: SemanticScholarPaper[];
-}
+// In-memory cache to prevent redundant network calls and guarantee fast responses
+const searchCache = new Map<string, { papers: SemanticScholarPaper[]; total: number; timestamp: number }>();
+const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
 export function formatCitation(
   authors: { authorId?: string; name: string }[] | undefined,
@@ -33,8 +30,9 @@ export function formatCitation(
 }
 
 /**
- * Searches the Semantic Scholar Academic Graph API for relevant research papers.
- * No placeholder or fallback data is used. Throws descriptive errors if rate limited or unconfigured.
+ * Searches Semantic Scholar using the official unauthenticated bulk search API.
+ * No API key is required.
+ * Includes in-memory caching and automatic retry with backoff.
  */
 export async function searchSemanticScholar(
   query: string,
@@ -45,7 +43,12 @@ export async function searchSemanticScholar(
     throw new Error("Search query cannot be empty.");
   }
 
-  const apiKey = process.env.SEMANTIC_SCHOLAR_API_KEY?.trim();
+  const cacheKey = `${cleanQuery.toLowerCase()}::${limit}`;
+  const cached = searchCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    return { papers: cached.papers, total: cached.total };
+  }
+
   const fields = [
     "paperId",
     "title",
@@ -55,53 +58,71 @@ export async function searchSemanticScholar(
     "citationCount",
     "url",
     "venue",
-    "tldr",
     "openAccessPdf",
   ].join(",");
 
-  const url = `${S2_API_URL}?query=${encodeURIComponent(cleanQuery)}&limit=${limit}&fields=${fields}`;
+  const url = `${S2_BULK_SEARCH_URL}?query=${encodeURIComponent(cleanQuery)}&sort=citationCount:desc&fields=${fields}`;
 
   const headers: Record<string, string> = {
     Accept: "application/json",
     "User-Agent": "HypoTree-Scientific-Workspace/1.0 (academic-research)",
   };
 
-  if (apiKey) {
-    headers["x-api-key"] = apiKey;
+  // Optional key support if user ever sets it, but strictly NOT required
+  const optionalKey = process.env.SEMANTIC_SCHOLAR_API_KEY?.trim();
+  if (optionalKey) {
+    headers["x-api-key"] = optionalKey;
   }
 
-  const res = await fetch(url, {
-    method: "GET",
-    headers,
-    cache: "no-store",
-  });
+  // Execute request with retry on rate limit
+  const maxAttempts = 3;
+  let lastError: Error | null = null;
 
-  if (!res.ok) {
-    let errorMsg = `Semantic Scholar API request failed (${res.status} ${res.statusText})`;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const errJson = await res.json();
-      if (errJson.message) errorMsg = errJson.message;
-    } catch {
-      // ignore json parse error
-    }
+      const res = await fetch(url, {
+        method: "GET",
+        headers,
+        cache: "no-store",
+      });
 
-    if (res.status === 429) {
-      throw new Error(
-        `Semantic Scholar rate limit reached (HTTP 429). ${
-          apiKey
-            ? "Your API key quota may have been exceeded."
-            : "Please add SEMANTIC_SCHOLAR_API_KEY to your .env.local file for higher rate limits (get one at https://www.semanticscholar.org/product/api#api-key-form)."
-        }`,
-      );
-    }
+      if (res.status === 429 && attempt < maxAttempts) {
+        // Wait 1.5s before retrying
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        continue;
+      }
 
-    throw new Error(`Semantic Scholar error: ${errorMsg}`);
+      if (!res.ok) {
+        let errorMsg = `Semantic Scholar request failed (${res.status} ${res.statusText})`;
+        try {
+          const errJson = await res.json();
+          if (errJson.message) errorMsg = errJson.message;
+          if (errJson.error) errorMsg = errJson.error;
+        } catch {
+          // ignore json parse error
+        }
+        throw new Error(errorMsg);
+      }
+
+      const data = await res.json();
+      const allPapers: SemanticScholarPaper[] = data.data || [];
+      const slicedPapers = allPapers.slice(0, limit);
+      const total = data.total || allPapers.length;
+
+      const result = {
+        papers: slicedPapers,
+        total,
+      };
+
+      searchCache.set(cacheKey, { ...result, timestamp: Date.now() });
+      return result;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (attempt < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
+    }
   }
 
-  const data = (await res.json()) as SemanticScholarSearchResult;
-  return {
-    papers: data.data || [],
-    total: data.total || (data.data ? data.data.length : 0),
-  };
+  throw lastError || new Error("Failed to retrieve papers from Semantic Scholar.");
 }
-

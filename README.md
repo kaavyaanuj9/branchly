@@ -15,19 +15,16 @@ Powered by:
    cp .env.example .env.local
    ```
 
-2. Add your keys in `.env.local`:
+2. Add your Anthropic API key in `.env.local`:
    ```bash
    # Required: Anthropic API Key for Claude Sonnet 5.5
    ANTHROPIC_API_KEY=sk-ant-api03-...
 
-   # Optional (defaults to claude-sonnet-5.5)
+   # Optional: Model name (defaults to claude-sonnet-5.5)
    ANTHROPIC_MODEL=claude-sonnet-5.5
-
-   # Recommended: Semantic Scholar API Key for literature searching
-   SEMANTIC_SCHOLAR_API_KEY=your_key_here
    ```
    - **Anthropic Key**: Get one at [console.anthropic.com](https://console.anthropic.com/).
-   - **Semantic Scholar Key**: Request one at [semanticscholar.org/product/api](https://www.semanticscholar.org/product/api#api-key-form) for high rate limits (unauthenticated public requests have strict rate limits).
+   - **Semantic Scholar API**: **No API key is needed!** Research paper searching runs unauthenticated out of the box via Semantic Scholar's academic graph bulk search API.
 
 ---
 
