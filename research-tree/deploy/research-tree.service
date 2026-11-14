@@ -1,0 +1,20 @@
+[Unit]
+Description=Research Tree (live arXiv LLM-agent map)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=researchtree
+WorkingDirectory=/opt/research-tree
+ExecStart=/opt/research-tree/.venv/bin/python -u server.py
+Restart=always
+RestartSec=10
+# secrets (S2_API_KEY, ADMIN_TOKEN, ...) live in /opt/research-tree/.env, read by config.py
+Environment=RT_HOST=127.0.0.1 RT_PORT=8765
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/research-tree/data /opt/research-tree/backups
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,14 @@
+[
+ {"id": "2601.11037", "problem": "search agents never admit they don't know", "method": "RL reward for abstaining when evidence is insufficient", "setting": "agentic search question answering"},
+ {"id": "2604.09564", "problem": "checking whether coding agents use cloud SDKs correctly", "method": "execution-free benchmark with regex and LLM-judge checks", "setting": "Azure SDK coding tasks"},
+ {"id": "2609.34112", "problem": "missing findings in clinical notes treated as normal", "method": "LLM extraction separated from rule-based decision logic", "setting": "clinical risk calculators like HEART and Wells"},
+ {"id": "2606.28360", "problem": "students struggle to find answers about academic policies", "method": "multi-agent RAG with institutional guardrails", "setting": "university academic advising"},
+ {"id": "2609.21254", "problem": "developers with ADHD need collaboration support", "method": "AI coding assistant as body-doubling copresence", "setting": "software developers in hybrid workplaces"},
+ {"id": "2608.22132", "problem": "multi-hop biomedical question answering", "method": "self-evolving agent with a trainable retrieval policy", "setting": "biomedical knowledge of drugs, diseases and proteins"},
+ {"id": "2609.12184", "problem": "calibrating semiconductor device simulations is slow and expert-dependent", "method": "agentic workflow that selects physical model parameters", "setting": "oxide semiconductor transistors"},
+ {"id": "2603.23129", "problem": "recursive self-improvement for small language models", "method": "Gödel agent that patches its own policy from failures", "setting": "compact models on reasoning benchmarks"},
+ {"id": "2606.13945", "problem": "rare disease diagnosis needs evidence from many hospitals", "method": "latent communication between agents instead of text", "setting": "privacy-restricted cross-hospital collaboration"},
+ {"id": "2605.21027", "problem": "non-technical users can't access enterprise data", "method": "agent calling governed analytics APIs instead of text-to-SQL", "setting": "enterprise business intelligence"},
+ {"id": "2604.07054", "problem": "persuasion in multi-turn sales conversations", "method": "benchmark with an LLM judge and a buying-intent classifier", "setting": "financial services and consumer goods sales"},
+ {"id": "2606.16231", "problem": "LLMs generate incorrect GPU kernels", "method": "instruction tuning focused on execution-sensitive code regions", "setting": "CUDA kernel generation"}
+]

@@ -1,0 +1,970 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Research Tree · LLM Agents</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --ink: #14171c; --muted: #5d6673; --faint: #8b93a0;
+  --line: #e3e6eb; --link: #c9ced6; --accent: #0f7b6c; --fresh: #e8590c; --claim: #7048e8;
+  --good: #2f9e44; --dead: #868e96; --chip: #eef1f4; --shadow: 0 1px 2px rgba(16,24,40,.06), 0 4px 16px rgba(16,24,40,.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1014; --panel: #151a20; --ink: #e8ecf1; --muted: #9aa4b2; --faint: #6b7583;
+    --line: #252c35; --link: #2f3843; --accent: #38c2ad; --fresh: #ff8a3d; --claim: #9d85ff;
+    --good: #51cf66; --dead: #6b7583; --chip: #1e252e; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 6px 24px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1014; --panel: #151a20; --ink: #e8ecf1; --muted: #9aa4b2; --faint: #6b7583;
+  --line: #252c35; --link: #2f3843; --accent: #38c2ad; --fresh: #ff8a3d; --claim: #9d85ff;
+  --good: #51cf66; --dead: #6b7583; --chip: #1e252e; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 6px 24px rgba(0,0,0,.35);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.45 Inter, system-ui, sans-serif; display: flex; flex-direction: column; }
+a { color: inherit; }
+button { font: inherit; cursor: pointer; }
+header { display: flex; align-items: center; gap: 16px; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+.brand { font-weight: 700; letter-spacing: -.01em; white-space: nowrap; }
+.brand span { color: var(--faint); font-weight: 500; }
+.live { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 0 var(--good); animation: beat 2s infinite; }
+.dot.err { background: var(--fresh); animation: none; }
+@keyframes beat { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 60%, transparent); } 70% { box-shadow: 0 0 0 7px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+.live b { color: var(--ink); font-weight: 600; }
+form.locate { flex: 1; min-width: 260px; display: flex; gap: 8px; }
+form.locate input { flex: 1; min-width: 0; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; }
+form.locate input:focus { outline: 2px solid color-mix(in srgb, var(--accent) 50%, transparent); border-color: var(--accent); }
+.btn { padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); font-size: 13px; }
+.btn:hover { border-color: var(--faint); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+main { flex: 1; display: flex; min-height: 0; }
+#treewrap { flex: 1; position: relative; min-width: 0; }
+svg#tree { width: 100%; height: 100%; display: block; cursor: grab; }
+svg#tree:active { cursor: grabbing; }
+.toolbar { position: absolute; left: 12px; top: 12px; display: flex; gap: 6px; flex-wrap: wrap; }
+.legend { position: absolute; left: 12px; bottom: 12px; font-size: 11.5px; color: var(--muted); background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; display: flex; gap: 14px; flex-wrap: wrap; max-width: calc(100% - 24px); }
+.legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+aside { width: 440px; max-width: 100%; border-left: 1px solid var(--line); background: var(--panel); overflow-y: auto; }
+.pad { padding: 16px 18px; }
+h2 { font-size: 17px; margin: 4px 0 6px; letter-spacing: -.01em; }
+h3 { font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--faint); margin: 20px 0 8px; font-weight: 600; }
+.crumbs { font-size: 12px; color: var(--faint); display: flex; flex-wrap: wrap; gap: 4px; }
+.crumbs a { cursor: pointer; text-decoration: none; }
+.crumbs a:hover { color: var(--ink); }
+.chips { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
+.chip { background: var(--chip); border-radius: 999px; padding: 2px 9px; font-size: 12px; color: var(--muted); }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
+.stat { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+.stat b { display: block; font-size: 17px; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 11px; color: var(--faint); }
+.paper { padding: 10px 0; border-top: 1px solid var(--line); }
+.paper:first-child { border-top: none; }
+.paper a.t { font-weight: 600; text-decoration: none; font-size: 13.5px; line-height: 1.35; }
+.paper a.t:hover { text-decoration: underline; }
+.meta { font-size: 12px; color: var(--faint); margin-top: 3px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.abs { font-size: 12.5px; color: var(--muted); margin-top: 5px; }
+.age { font-variant-numeric: tabular-nums; }
+.age.fresh { color: var(--fresh); font-weight: 600; }
+.tag { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.tag.bridge { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); color: var(--accent); }
+.frontier { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; cursor: pointer; background: var(--bg); }
+.frontier:hover { border-color: var(--accent); }
+.frontier .p { font-size: 11.5px; color: var(--faint); }
+.frontier .l { font-weight: 600; margin: 2px 0; }
+.bar { height: 4px; border-radius: 2px; background: var(--chip); margin-top: 6px; overflow: hidden; }
+.bar > div { height: 100%; background: var(--accent); }
+.sig { display: flex; gap: 6px; flex-wrap: wrap; }
+.sig button { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); font-size: 12.5px; }
+.sig button.claim { border-color: color-mix(in srgb, var(--claim) 55%, var(--line)); }
+.sig button.promising { border-color: color-mix(in srgb, var(--good) 55%, var(--line)); }
+.sig button:hover { background: var(--chip); }
+.sigcounts { display: flex; gap: 12px; font-size: 12.5px; color: var(--muted); margin-bottom: 8px; flex-wrap: wrap; }
+.sigcounts b { color: var(--ink); }
+.siglog { font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+.siglog div { padding: 4px 0; }
+.sigform { display: none; margin-top: 10px; gap: 6px; flex-direction: column; }
+.sigform.open { display: flex; }
+.sigform input, .sigform textarea { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); font: inherit; font-size: 13px; }
+.sigform label { font-size: 12.5px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+pre { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; font: 12px/1.5 "JetBrains Mono", monospace; overflow-x: auto; white-space: pre-wrap; word-break: break-all; color: var(--muted); }
+.near { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); cursor: pointer; font-size: 13px; }
+.near:hover .nl { text-decoration: underline; }
+.near .nb { color: var(--faint); font-size: 12px; white-space: nowrap; }
+.note { font-size: 12.5px; color: var(--muted); }
+.hint { padding: 10px 12px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 12%, var(--panel)); border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line)); font-size: 13px; margin-top: 10px; }
+.sim { font: 11.5px "JetBrains Mono", monospace; color: var(--accent); }
+.toast { position: fixed; right: 460px; bottom: 16px; background: var(--ink); color: var(--bg); padding: 10px 14px; border-radius: 10px; box-shadow: var(--shadow); font-size: 13px; opacity: 0; transform: translateY(8px); transition: .25s; pointer-events: none; max-width: 360px; }
+.toast.show { opacity: 1; transform: none; }
+/* tree */
+.link { fill: none; stroke: var(--link); stroke-width: 1.3; }
+.node circle.body { stroke: var(--panel); stroke-width: 1.5; cursor: pointer; }
+.node text { font-size: 12px; fill: var(--ink); paint-order: stroke; stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round; cursor: pointer; }
+.node text.sub { font-size: 10.5px; fill: var(--faint); }
+.node.branch text.lbl { font-weight: 600; font-size: 13px; }
+.node.selected circle.body { stroke: var(--ink); stroke-width: 2.5; }
+.node.tip text { font-size: 11px; fill: var(--muted); }
+.node.tip.fresh text { fill: var(--fresh); }
+.node.tip circle.body { stroke-width: 1.4; }
+.ring { fill: none; stroke: var(--fresh); stroke-width: 1.5; opacity: .9; }
+.pulse { fill: none; stroke: var(--fresh); stroke-width: 2; animation: pulse 1.6s ease-out 4; }
+@keyframes pulse { from { r: 6; opacity: 1; } to { r: 34; opacity: 0; } }
+.flag { font-size: 10px; font-weight: 700; }
+.badge { background: var(--fresh); color: #fff; border-radius: 999px; padding: 0 6px; font-size: 11px; font-weight: 700; margin-left: 4px; }
+.alertbox { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); display: none; }
+.alertbox.open { display: block; }
+.alertbox input { width: 100%; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); font: inherit; font-size: 13px; margin: 6px 0; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--panel); }
+.seg button { border: 0; background: transparent; color: var(--muted); padding: 7px 12px; font-size: 13px; }
+.seg button.on { background: var(--ink); color: var(--bg); font-weight: 600; }
+.seg button:disabled { opacity: .45; cursor: not-allowed; }
+.lin-link { fill: none; stroke: var(--muted); stroke-width: 1; opacity: .07; }
+.lin-link.main { opacity: .5; stroke-width: 1.2; }
+.lin-link.hl { stroke: var(--ink); opacity: 1; stroke-width: 1.6; }
+.lin-link.dim, .lin-node.dim { opacity: .12; }
+.lin-node { cursor: pointer; }
+.lin-node text { font-size: 10.5px; fill: var(--muted); paint-order: stroke; stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round; pointer-events: none; }
+.lin-node.focus text { fill: var(--ink); font-weight: 600; font-size: 11.5px; }
+.axis text { fill: var(--faint); font-size: 11px; }
+.axis path, .axis line { stroke: var(--line); }
+.tooltip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; max-width: 320px; display: none; z-index: 5; }
+.tooltip b { display: block; margin-bottom: 3px; }
+.explored { color: var(--muted); }
+@media (max-width: 860px) {
+  main { flex-direction: column; }
+  #treewrap { height: 62vh; flex: none; }
+  aside { width: 100%; border-left: none; border-top: 1px solid var(--line); }
+  .toast { right: 16px; }
+  .stats { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">Research Tree <span>/ LLM Agents</span></div>
+  <div class="live" id="live"><div class="dot" id="dot"></div><span id="livetext">connecting…</span></div>
+  <button class="btn" id="myalerts" title="Your alerts on this browser">My alerts <span id="alertbadge" class="badge" style="display:none"></span></button>
+  <form class="locate" id="locate">
+    <input id="q" placeholder="Describe your idea — find where it sits on the tree and what's closest" autocomplete="off">
+    <button class="btn primary">Locate</button>
+  </form>
+</header>
+<main>
+  <div id="treewrap">
+    <svg id="tree"></svg>
+    <div class="toolbar">
+      <div class="seg" id="viewseg">
+        <button id="v-tree" class="on">Topic tree</button>
+        <button id="v-lin" disabled title="Select a branch or topic first">Lineage</button>
+      </div>
+      <span id="treetools" style="display:flex;gap:6px">
+        <button class="btn" id="expand">Show all frontier tips</button>
+        <button class="btn" id="collapse">Collapse</button>
+        <button class="btn" id="home">Overview</button>
+      </span>
+      <span id="lintools" style="display:none;gap:6px">
+        <button class="btn" id="linback" style="display:none">← Topic lineage</button>
+      </span>
+    </div>
+    <div class="legend" id="legend-lin" style="display:none">
+      <span><i style="background:var(--muted)"></i>built on by papers in the tree</span>
+      <span><i style="border:1.8px solid var(--muted);width:11px;height:11px;background:transparent"></i>not built on yet</span>
+      <span><i style="border:1.5px dashed var(--muted);width:11px;height:11px;background:transparent"></i>from another topic or branch</span>
+      <span>solid line = closest reference (main line) · hover a paper for its full ancestry · colour = branch</span>
+    </div>
+    <div class="tooltip" id="tip"></div>
+    <div class="legend" id="legend-tree">
+      <span><i style="background:var(--fresh)"></i>public &lt; 48h</span>
+      <span><i style="border:1.5px solid var(--fresh);width:11px;height:11px"></i>hot (momentum ≥ 1.5×)</span>
+      <span><i style="background:var(--claim)"></i>claimed</span>
+      <span><i style="background:var(--good)"></i>promising</span>
+      <span><i style="background:var(--dead)"></i>dead end</span>
+      <span>size = papers</span>
+    </div>
+  </div>
+  <aside id="panel"><div class="pad" id="panelbody">Loading tree…</div></aside>
+</main>
+<div class="toast" id="toast"></div>
+<script>
+const PALETTE = ["#4c6ef5","#0ca678","#f59f00","#e64980","#7048e8","#1c7ed6","#12b886","#d9480f","#2b8a3e","#ae3ec9","#c92a2a","#5c940d","#495057"];
+const DAY = 86400;
+let TREE = null, STATUS = null, ROOT = null, SELECTED = null;
+let OPEN = new Set(["root"]);
+const branchColor = {};
+const feed = [];
+
+// ---------- utils
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function ago(ts) {
+  const s = Date.now() / 1000 - ts;
+  if (s > 60 * DAY) return "since " + new Date(ts * 1000).toLocaleDateString(undefined, { month: "short", year: "numeric" });
+  if (s < 0) return "in " + dur(-s);
+  if (s < 3600) return Math.max(1, Math.round(s / 60)) + "m ago";
+  if (s < DAY) return Math.round(s / 3600) + "h ago";
+  return Math.round(s / DAY) + "d ago";
+}
+function dur(s) {
+  s = Math.max(0, Math.round(s));
+  const d = Math.floor(s / DAY), h = Math.floor(s % DAY / 3600), m = Math.floor(s % 3600 / 60);
+  return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m ${s % 60}s`;
+}
+const fresh = ts => Date.now() / 1000 - ts < 2 * DAY;
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 4500);
+}
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  if (!r.ok) throw new Error((await r.json()).error || r.statusText);
+  return r.json();
+}
+function spark(weeks) {
+  const w = 120, h = 26, max = Math.max(1, ...weeks), bw = w / weeks.length;
+  return `<svg width="${w}" height="${h}" aria-label="papers per week, last 8 weeks">` + weeks.map((v, i) =>
+    `<rect x="${i * bw + 1}" y="${h - (v / max) * (h - 2)}" width="${bw - 2}" height="${(v / max) * (h - 2)}" rx="1.5" fill="var(--accent)" opacity="${.35 + .65 * (i + 1) / weeks.length}"><title>${v} papers</title></rect>`).join("") + "</svg>";
+}
+
+// ---------- tree
+const svg = d3.select("#tree");
+const g = svg.append("g");
+const gLinks = g.append("g"), gNodes = g.append("g");
+const zoom = d3.zoom().scaleExtent([0.15, 2.5]).on("zoom", e => g.attr("transform", e.transform));
+svg.call(zoom).on("dblclick.zoom", null);
+
+function hierarchy(data) {
+  return d3.hierarchy(data, d => {
+    if (!OPEN.has(d.id)) return null;
+    if (d.children) return d.children;
+    if (d.tips) return d.tips.map(t => ({ ...t, isTip: true, label: t.title, id: "tip:" + t.id + ":" + d.id }));
+    return null;
+  });
+}
+
+function nodeRadius(d) {
+  if (d.data.isTip) return 3.5;
+  if (d.depth === 0) return 9;
+  return Math.max(3.5, Math.min(16, Math.sqrt(d.data.count || 1) * 0.55));
+}
+
+function render(pulseNodes = new Set()) {
+  if (!TREE) return;
+  ROOT = hierarchy(TREE);
+  const layout = d3.tree().nodeSize([16, 250]).separation((a, b) =>
+    (a.data.isTip && b.data.isTip ? 1.15 : 2.1) * (a.parent === b.parent ? 1 : 1.3));
+  layout(ROOT);
+  const nodes = ROOT.descendants(), links = ROOT.links();
+
+  gLinks.selectAll("path").data(links, d => d.target.data.id)
+    .join(enter => enter.append("path").attr("class", "link").attr("opacity", 0).call(e => e.transition().duration(300).attr("opacity", 1)))
+    .attr("d", d3.linkHorizontal().x(d => d.y).y(d => d.x))
+    .attr("stroke", d => d.target.data.isTip ? "var(--link)" : (branchColor[d.target.data.branch] || "var(--link)"))
+    .attr("stroke-opacity", d => d.target.data.isTip ? 0.8 : 0.35);
+
+  const sel = gNodes.selectAll("g.node").data(nodes, d => d.data.id).join(enter => {
+    const n = enter.append("g").attr("opacity", 0);
+    n.transition().duration(300).attr("opacity", 1);
+    return n;
+  });
+  sel.attr("class", d => "node" + (d.depth === 1 ? " branch" : "") + (d.data.isTip ? " tip" + (fresh(d.data.announced) ? " fresh" : "") : "") + (SELECTED === d.data.id ? " selected" : ""))
+     .attr("transform", d => `translate(${d.y},${d.x})`);
+  sel.selectAll("*").remove();
+
+  sel.each(function (d) {
+    const n = d3.select(this), dd = d.data, r = nodeRadius(d);
+    if (!dd.isTip && dd.momentum >= 1.5 && d.depth > 1) n.append("circle").attr("class", "ring").attr("r", r + 3.5);
+    if (pulseNodes.has(dd.id)) n.append("circle").attr("class", "pulse").attr("r", 6);
+    n.append("circle").attr("class", "body").attr("r", r)
+      .attr("fill", dd.isTip ? (dd.built_on ? (fresh(dd.announced) ? "var(--fresh)" : "var(--faint)") : "var(--bg)") : d.depth === 0 ? "var(--ink)" : branchColor[dd.branch])
+      .attr("stroke", dd.isTip ? (fresh(dd.announced) ? "var(--fresh)" : "var(--faint)") : null)
+      .attr("fill-opacity", dd.isTip ? 1 : (d.children || !hasKids(dd)) ? 1 : 0.55);
+    const s = dd.signals || {};
+    let fx = r + 4;
+    [["claim", "var(--claim)"], ["promising", "var(--good)"], ["dead_end", "var(--dead)"]].forEach(([k, c]) => {
+      if (s[k]) { n.append("circle").attr("cx", -fx).attr("cy", -r - 1).attr("r", 3.2).attr("fill", c).append("title").text(`${s[k]} ${k.replace("_", " ")}`); fx += 8; }
+    });
+    if (dd.isTip) {
+      const t = n.append("text").attr("x", 8).attr("dy", "0.32em").text(trunc(dd.title, 70) + "  ·  " + ago(dd.announced));
+      t.append("title").text(dd.title);
+      n.on("click", (e) => { e.stopPropagation(); showPaperLineage(dd.id); });
+      return;
+    }
+    const lx = d.depth === 0 ? -14 : (d.children ? -r - 6 : r + 6);
+    const anchor = d.depth === 0 || d.children ? "end" : "start";
+    n.append("text").attr("class", "lbl").attr("x", lx).attr("dy", d.depth >= 2 ? "-0.15em" : "0.32em").attr("text-anchor", anchor)
+      .text(d.depth === 0 ? `${dd.label}` : trunc(dd.label, 34));
+    if (d.depth >= 2) n.append("text").attr("class", "sub").attr("x", lx).attr("dy", "1.05em").attr("text-anchor", anchor)
+      .text(`${dd.count} · +${dd.n7} this wk` + (dd.momentum >= 1.5 ? ` · ${dd.momentum}×` : ""));
+    if (d.depth === 1) n.append("text").attr("class", "sub").attr("x", lx).attr("dy", "1.5em").attr("text-anchor", anchor).text(`${dd.count} papers · +${dd.n7}/wk`);
+    n.on("click", (e) => { e.stopPropagation(); onNodeClick(d); });
+  });
+}
+const hasKids = dd => (dd.children && dd.children.length) || (dd.tips && dd.tips.length);
+const trunc = (s, n) => s.length > n ? s.slice(0, n - 1) + "…" : s;
+
+function onNodeClick(d) {
+  const id = d.data.id;
+  if (id !== "root") {
+    if (OPEN.has(id) && SELECTED === id) OPEN.delete(id); else OPEN.add(id);
+  }
+  SELECTED = id;
+  updateSeg();
+  render();
+  if (id === "root") { showOverview(); fit(); } else { showNode(id); focusNode(id); }
+}
+
+function fit(duration = 600) {
+  const b = g.node().getBBox(), W = svg.node().clientWidth, H = svg.node().clientHeight;
+  if (!W || !H || !b.width) { requestAnimationFrame(() => fit(duration)); return; }
+  const k = Math.max(0.15, Math.min(1.1, 0.92 * Math.min(W / (b.width + 80), H / (b.height + 40))));
+  const t = d3.zoomIdentity.translate(W / 2 - k * (b.x + b.width / 2), H / 2 - k * (b.y + b.height / 2)).scale(k);
+  svg.transition().duration(duration).call(zoom.transform, t);
+}
+function focusNode(id) {
+  const d = ROOT.descendants().find(x => x.data.id === id);
+  if (!d) return;
+  const W = svg.node().clientWidth, H = svg.node().clientHeight, k = 0.95;
+  svg.transition().duration(600).call(zoom.transform, d3.zoomIdentity.translate(W * 0.35 - k * d.y, H / 2 - k * d.x).scale(k));
+}
+
+function findPath(id, node = TREE, acc = []) {
+  if (node.id === id) return [...acc, node.id];
+  for (const c of node.children || []) { const p = findPath(id, c, [...acc, node.id]); if (p) return p; }
+  return null;
+}
+function reveal(id) {
+  (findPath(id) || []).forEach(x => OPEN.add(x));
+  SELECTED = id; updateSeg();
+  if (VIEW !== "tree") { setView("tree"); return; }
+  render(); setTimeout(() => focusNode(id), 30);
+}
+function allLeaves(node = TREE, out = []) {
+  if (node.children) node.children.forEach(c => allLeaves(c, out)); else out.push(node);
+  return out;
+}
+
+// ---------- panel: overview
+async function showOverview() {
+  SELECTED = "root";
+  const leaves = allLeaves().filter(l => l.opportunity !== undefined).sort((a, b) => b.opportunity - a.opportunity);
+  const maxO = leaves[0]?.opportunity || 1;
+  const labelOf = id => (TREE.children.find(b => b.id === id) || {}).label || id;
+  const frontiers = leaves.slice(0, 8).map(l => `
+    <div class="frontier" data-id="${l.id}">
+      <div class="p">${esc(labelOf(l.branch))}</div>
+      <div class="l">${esc(l.label)}</div>
+      <div class="meta"><span>${l.n14} new in 14d</span><span>${l.momentum}× usual pace</span><span>${l.count} total</span>
+        ${l.signals.claim ? `<span style="color:var(--claim)">${l.signals.claim} claimed</span>` : `<span>unclaimed</span>`}</div>
+      <div class="bar"><div style="width:${100 * l.opportunity / maxO}%"></div></div>
+    </div>`).join("");
+  const branches = [...TREE.children].sort((a, b) => b.n7 - a.n7).map(b => `
+    <div class="near" data-id="${b.id}"><span class="nl"><i style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${branchColor[b.id]};margin-right:7px"></i>${esc(b.label)}</span>
+    <span class="nb">${b.count} · +${b.n7}/wk · ${b.momentum}×</span></div>`).join("");
+  document.getElementById("panelbody").innerHTML = `
+    <h2>LLM Agents frontier map</h2>
+    <div class="note">${TREE.count.toLocaleString()} papers from arXiv, organised into ${TREE.children.length} curated branches and ${leaves.length} automatically grown topics. New papers are placed on the tree the moment arXiv makes them public.</div>
+    <h3>Just in</h3><div id="feed">${feedHTML()}</div>
+    <h3>Open frontiers</h3>
+    <div class="note" style="margin-bottom:8px">Ranked by recent activity × acceleration, discounted for claims and dead-end marks.</div>
+    ${frontiers}
+    <h3>Branches by activity this week</h3>${branches}
+    <h3>For agents</h3>
+    <pre>curl -s localhost:${location.port}/api/frontier?limit=5
+curl -s "localhost:${location.port}/api/locate?q=your+idea"
+# full guide: <a href="/agents.md" target="_blank">/agents.md</a></pre>`;
+  bindPanel();
+}
+
+function feedHTML() {
+  let items = feed.slice(0, 8);
+  if (!items.length) {
+    // newest announcement first; within one announcement, spread across branches
+    const tips = allLeaves().flatMap(l => l.tips || []).sort((a, b) => b.announced - a.announced || (a.id < b.id ? 1 : -1));
+    const seen = new Set();
+    items = tips.filter(t => t.announced === tips[0].announced && !seen.has(t.branch) && seen.add(t.branch)).slice(0, 6);
+  }
+  return items.map(p => paperHTML(p, false, true)).join("") || `<div class="note">Waiting for the next arXiv announcement…</div>`;
+}
+
+function exploredHTML(p) {
+  if (p.built_on === undefined) return "";
+  return `<span class="explored">${p.built_on ? `built on by ${p.built_on}` : "not built on yet"}</span>`;
+}
+function paperHTML(p, withAbs = true, withWhere = false) {
+  const leaf = withWhere && p.node ? findLeaf(p.node) : null;
+  const live = ["listing", "api", "rss"].includes(p.source);   // only papers caught by the live poller
+  const lag = live && p.first_seen ? ` · caught ${dur(Math.max(0, p.first_seen - p.announced))} after release` : "";
+  return `<div class="paper">
+    <a class="t" href="${p.url}" target="_blank" rel="noopener">${esc(p.title)}</a>
+    <div class="meta"><span class="age ${fresh(p.announced) ? "fresh" : ""}">public ${ago(p.announced)}${lag}</span>
+      <span>${esc((p.authors || []).join(", "))}</span>
+      ${leaf ? `<a class="tag" style="cursor:pointer;text-decoration:none" data-id="${leaf.id}">${esc(trunc(leaf.label, 30))}</a>` : ""}
+      ${p.bridge ? `<span class="tag bridge" title="Also scores almost as high in another branch">↔ ${esc(labelBranch(p.bridge))}</span>` : ""}
+      ${p.sim !== undefined ? `<span class="sim">sim ${p.sim.toFixed(2)}</span>` : ""}
+      ${exploredHTML(p)}
+      <a class="tag" style="cursor:pointer;text-decoration:none" data-lin="${p.id}">lineage</a></div>
+    ${withAbs && p.abstract ? `<div class="abs">${esc(p.abstract)}</div>` : ""}
+  </div>`;
+}
+const labelBranch = id => (TREE.children.find(b => b.id === id) || {}).label || id;
+function findLeaf(id, node = TREE) {
+  if (node.id === id) return node;
+  for (const c of node.children || []) { const r = findLeaf(id, c); if (r) return r; }
+  return null;
+}
+
+// ---------- panel: node
+async function showNode(id) {
+  const body = document.getElementById("panelbody");
+  let d;
+  try { d = await api(`/api/node/${encodeURIComponent(id)}`); } catch (e) { body.innerHTML = esc(e.message); return; }
+  const s = d.signals;
+  body.innerHTML = `
+    <div class="crumbs">${d.path.map(p => `<a data-id="${p.id}">${esc(p.label)}</a>`).join(" › ")}</div>
+    <h2>${esc(d.label)}</h2>
+    ${d.depth === 1 ? `<div class="note">${esc(d.branch_desc)}</div>` : ""}
+    ${d.keywords.length ? `<div class="chips">${d.keywords.map(k => `<span class="chip">${esc(k)}</span>`).join("")}</div>` : ""}
+    <div class="stats">
+      <div class="stat"><b>${d.count}</b><span>papers</span></div>
+      <div class="stat"><b>+${d.n7}</b><span>this week</span></div>
+      <div class="stat"><b>${d.momentum}×</b><span>pace vs usual</span></div>
+      <div class="stat">${spark(d.weeks)}<span>8 weeks</span></div>
+    </div>
+
+    <div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn" data-linnode="${d.id}">Show citation lineage of this ${d.depth === 1 ? "branch" : "topic"} →</button>
+      <button class="btn" id="alertbtn">Alert me about new papers here</button></div>
+    ${alertBoxHTML("topic")}
+    <h3>Who's on this branch</h3>
+    <div class="sigcounts"><span><b>${s.claim}</b> working on it${d.private_claims ? ` (${d.private_claims} private)` : ""}</span><span><b>${s.promising}</b> promising</span><span><b>${s.dead_end}</b> dead end</span><span><b>${s.done}</b> done</span></div>
+    <div class="sig">
+      <button class="claim" data-kind="claim">I'm working on this</button>
+      <button class="promising" data-kind="promising">Promising</button>
+      <button data-kind="dead_end">Dead end</button>
+      <button data-kind="note">Note</button>
+    </div>
+    <form class="sigform" id="sigform">
+      <input name="who" placeholder="Your name or agent id" maxlength="60">
+      <textarea name="text" rows="2" placeholder="What are you trying? What failed? (optional)"></textarea>
+      <label><input type="checkbox" name="private"> Keep my claim private (only counted, not shown)</label>
+      <label><input type="checkbox" name="agent"> I'm an agent</label>
+      <div style="display:flex;gap:6px"><button class="btn primary">Submit</button><button type="button" class="btn" id="sigcancel">Cancel</button></div>
+    </form>
+    ${d.signal_log.length ? `<div class="siglog">${d.signal_log.map(x => `<div><b>${esc(x.who)}</b>${x.actor === "agent" ? " (agent)" : ""} · ${x.kind.replace("_", " ")} · ${ago(x.created)}${x.text ? ` — ${esc(x.text)}` : ""}</div>`).join("")}</div>` : ""}
+
+    ${d.children.length ? `<h3>Sub-branches</h3>${d.children.map(c => `<div class="near" data-id="${c.id}"><span class="nl">${esc(c.label)}</span><span class="nb">›</span></div>`).join("")}` : ""}
+
+    <h3>Frontier — newest first</h3>
+    ${d.papers.slice(0, 25).map(p => paperHTML(p)).join("")}
+
+    ${d.exemplars.length ? `<h3>Most typical papers here</h3>${d.exemplars.map(p => paperHTML(p, false)).join("")}` : ""}
+
+    ${d.near.length ? `<h3>Where this touches other branches</h3>
+      <div class="note" style="margin-bottom:4px">Closest topics in other branches. Good ideas often sit where two branches meet.</div>
+      ${d.near.map(n => `<div class="near" data-id="${n.id}"><span class="nl">${esc(n.label)}</span><span class="nb">${esc(labelBranch(n.branch))} · ${n.sim.toFixed(2)}</span></div>`).join("")}
+      ${d.bridges.length ? `<div class="note" style="margin-top:6px">${d.bridges.map(b => `${b.papers} papers here also fit <b>${esc(b.label)}</b>`).join(" · ")}</div>` : ""}` : ""}
+
+    ${d.roots.length ? `<h3>Lineage of this branch</h3>${d.roots.map(r => `<div class="paper"><a class="t" href="https://arxiv.org/abs/${r.id}" target="_blank">${esc(r.title)}</a><div class="meta">${r.year} · landmark</div></div>`).join("")}` : ""}
+
+    <h3>For agents</h3>
+    <pre>curl -s localhost:${location.port}/api/node/${d.id}
+curl -s -X POST localhost:${location.port}/api/node/${d.id}/signal \\
+  -H 'Content-Type: application/json' \\
+  -d '{"kind":"claim","who":"my-agent","actor":"agent","text":"trying X"}'</pre>`;
+  bindPanel();
+  bindAlertBox({ kind: "topic", node: d.id });
+  let kind = null;
+  body.querySelectorAll(".sig button").forEach(b => b.onclick = () => {
+    kind = b.dataset.kind;
+    const f = document.getElementById("sigform");
+    f.classList.add("open");
+    f.querySelector("[name=who]").value = localStorage.getItem("rt_who") || "";
+    f.querySelector("[name=private]").parentElement.style.display = kind === "claim" ? "flex" : "none";
+    f.querySelector("button.primary").textContent = { claim: "Claim this branch", promising: "Mark promising", dead_end: "Mark dead end", note: "Add note" }[kind];
+  });
+  document.getElementById("sigcancel").onclick = () => document.getElementById("sigform").classList.remove("open");
+  document.getElementById("sigform").onsubmit = async e => {
+    e.preventDefault();
+    const f = e.target;
+    try { localStorage.setItem("rt_who", f.who.value); } catch {}
+    await api(`/api/node/${d.id}/signal`, { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind, who: f.who.value, text: f.text.value, actor: f.agent.checked ? "agent" : "human", visibility: f.private.checked ? "private" : "public" }) });
+    toast("Saved. Everyone on the tree can now see this signal.");
+    await refreshTree(); showNode(d.id);
+  };
+}
+
+function bindPanel() {
+  document.querySelectorAll("#panelbody [data-lin]").forEach(el => el.onclick = e => { e.preventDefault(); showPaperLineage(el.dataset.lin); });
+  document.querySelectorAll("#panelbody [data-linnode]").forEach(el => el.onclick = e => { e.preventDefault(); showLineage(el.dataset.linnode); });
+  document.querySelectorAll("#panelbody [data-id]").forEach(el => el.onclick = e => {
+    e.preventDefault();
+    const id = el.dataset.id;
+    if (id === "root") { SELECTED = "root"; render(); showOverview(); return; }
+    reveal(id); showNode(id);
+  });
+}
+
+// ---------- locate
+document.getElementById("locate").onsubmit = async e => {
+  e.preventDefault();
+  const q = document.getElementById("q").value.trim();
+  if (!q) return;
+  const body = document.getElementById("panelbody");
+  body.innerHTML = `<div class="note">Locating…</div>`;
+  const r = await api(`/api/locate?q=${encodeURIComponent(q)}`);
+  reveal(r.node);
+  body.innerHTML = `
+    <div class="crumbs">${r.placement_confidence >= 0.35 ? "Your idea lands in" : `Closest fit, but no clear home: only ${Math.round(r.placement_confidence * 100)}% of its nearest papers sit here`}</div>
+    <h2>${r.path.slice(1).map(p => esc(p.label)).join(" › ")}</h2>
+    ${r.bridge ? `<div class="note">It also sits close to <b>${esc(r.bridge.label)}</b>, so it bridges two branches.</div>` : ""}
+    <div class="hint">${esc(r.novelty_hint)}
+      ${r.closeness_percentile != null ? `<div class="note" style="margin-top:6px">Closest-match similarity is higher than for <b>${r.closeness_percentile}%</b> of real papers vs. their prior work (less reliable for very short ideas).</div>` : ""}
+      <div class="sim" style="margin-top:4px">closest ${r.max_similarity.toFixed(2)} · ${r.method === "neural" ? "meaning-based search" : "keyword-based search"}</div></div>
+    <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn primary" id="readbtn">What should I read? →</button>
+      <button class="btn" id="aspbtn">Break it down: problem / method / setting</button>
+      <button class="btn" id="alertbtn">Alert me about new papers like this</button>
+      <button class="btn" data-id="${r.node}">Open this branch</button></div>
+    ${alertBoxHTML("idea")}
+    <form class="sigform" id="aspform" style="margin-top:10px">
+      <div class="note">Name each part briefly. We check each part on its own, then whether any paper combines them.</div>
+      <input name="problem" placeholder="Problem, e.g. credit assignment in long multi-turn tasks">
+      <input name="method" placeholder="Method, e.g. RL with step-level rewards">
+      <input name="setting" placeholder="Setting, e.g. web shopping (WebShop), ALFWorld">
+      <div style="display:flex;gap:6px"><button class="btn primary">Check the combination</button></div>
+    </form>
+    <h3>Closest papers on the tree</h3>
+    ${r.nearest.map(p => paperHTML(p, true, true)).join("")}`;
+  bindPanel();
+  document.getElementById("readbtn").onclick = () => showReadingList(q);
+  document.getElementById("aspbtn").onclick = () => document.getElementById("aspform").classList.toggle("open");
+  bindAlertBox({ kind: "idea", query: q });
+  document.getElementById("aspform").onsubmit = ev => {
+    ev.preventDefault();
+    const f = ev.target;
+    showAspects({ problem: f.problem.value, method: f.method.value, setting: f.setting.value }, q);
+  };
+};
+
+// ---------- alerts: watch an idea or a topic
+const ALERT_KEY = "rt_alerts";
+function myAlerts() { try { return JSON.parse(localStorage.getItem(ALERT_KEY) || "[]"); } catch { return []; } }
+function saveAlerts(a) { try { localStorage.setItem(ALERT_KEY, JSON.stringify(a)); } catch {} }
+function alertBoxHTML(kind) {
+  return `<div class="alertbox" id="alertbox">
+    <div class="note">${kind === "idea" ? "We'll check every new arXiv release and keep papers that directly address this idea." : "We'll collect every new paper that lands in this topic."}
+      You get a private feed link (any RSS reader); optionally also post to a Slack or Discord channel.</div>
+    <input id="alertwebhook" placeholder="Optional: Slack or Discord webhook URL">
+    <button class="btn primary" id="alertcreate">Create alert</button>
+    <div id="alertresult"></div></div>`;
+}
+function bindAlertBox(spec) {
+  const btn = document.getElementById("alertbtn"), box = document.getElementById("alertbox");
+  if (!btn || !box) return;
+  btn.onclick = () => box.classList.toggle("open");
+  document.getElementById("alertcreate").onclick = async () => {
+    try {
+      const r = await api("/api/watch", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...spec, webhook: document.getElementById("alertwebhook").value.trim() }) });
+      const list = myAlerts(); list.unshift({ token: r.token, seen: Date.now() / 1000 }); saveAlerts(list);
+      const feed = location.origin + r.feed;
+      const v = await api(r.view);
+      document.getElementById("alertresult").innerHTML = `<div class="hint">Alert created. ${v.hits.length} matching papers from the last 14 days are already in it.
+        <div style="margin-top:6px">Private feed link (keep it secret): <input readonly value="${esc(feed)}" onclick="this.select()"></div>
+        <button class="btn" id="openalerts">Open My alerts</button></div>`;
+      document.getElementById("openalerts").onclick = showMyAlerts;
+      refreshAlertBadge();
+    } catch (e) { toast(e.message); }
+  };
+}
+async function refreshAlertBadge() {
+  let n = 0;
+  for (const a of myAlerts()) {
+    try { const v = await api(`/api/watch/${a.token}`); n += v.hits.filter(h => h.matched > a.seen).length; } catch {}
+  }
+  const b = document.getElementById("alertbadge");
+  b.style.display = n ? "" : "none"; b.textContent = n;
+}
+async function showMyAlerts() {
+  const body = document.getElementById("panelbody");
+  const list = myAlerts();
+  if (!list.length) { body.innerHTML = `<h2>My alerts</h2><div class="note">No alerts yet. Locate an idea or open a topic, then choose "Alert me".</div>`; return; }
+  const views = [];
+  for (const a of list) { try { views.push([a, await api(`/api/watch/${a.token}`)]); } catch {} }
+  body.innerHTML = `<h2>My alerts</h2><div class="note">Saved in this browser. Each alert's feed link works in any RSS reader.</div>` +
+    views.map(([a, v]) => {
+      const fresh = v.hits.filter(h => h.matched > a.seen).length;
+      return `<h3>${v.kind === "idea" ? "Idea" : "Topic"}: ${esc(trunc(v.label, 70))} ${fresh ? `<span class="badge">${fresh} new</span>` : ""}${v.active ? "" : " (stopped)"}</h3>
+        <div class="meta"><a href="/feed/${v.token}.xml" target="_blank">RSS feed</a>${v.webhook ? ` · posting to ${v.webhook}` : ""}
+          ${v.active ? ` · <a href="#" data-stop="${v.token}">stop</a>` : ""}</div>
+        ${v.hits.slice(0, 8).map(h => paperHTML(h, false, true) .replace('<div class="paper">', `<div class="paper">${h.matched > a.seen ? '<span class="tag" style="border-color:var(--fresh);color:var(--fresh)">new</span> ' : ""}`)).join("") || `<div class="note">No matches yet.</div>`}`;
+    }).join("");
+  bindPanel();
+  body.querySelectorAll("[data-stop]").forEach(el => el.onclick = async ev => {
+    ev.preventDefault(); await api(`/api/watch/${el.dataset.stop}/stop`, { method: "POST" }); showMyAlerts();
+  });
+  saveAlerts(list.map(a => ({ ...a, seen: Date.now() / 1000 })));
+  refreshAlertBadge();
+}
+document.getElementById("myalerts").onclick = showMyAlerts;
+
+// ---------- aspects: is the combination new?
+const ASPECT_COLORS = { problem: "#4c6ef5", method: "#e8590c", setting: "#0ca678" };
+function vennSVG(singles, combos) {
+  // three overlapping circles labelled with counts (approximate: not area-proportional)
+  const fmt = c => c ? `${c.count}${c.capped ? "+" : ""}` : undefined;
+  const keys = Object.keys(singles), cnt = k => fmt(combos.find(c => c.parts.join() === k.join()));
+  const pos = { problem: [70, 60], method: [130, 60], setting: [100, 112] };
+  const lab = (x, y, t, w) => `<text x="${x}" y="${y}" text-anchor="middle" font-size="12" font-weight="${w || 500}" fill="var(--ink)">${t}</text>`;
+  let svg = `<svg viewBox="0 0 200 175" width="220" style="display:block;margin:6px auto" role="img" aria-label="overlap of problem, method and setting">`;
+  keys.forEach(k => svg += `<circle cx="${pos[k][0]}" cy="${pos[k][1]}" r="48" fill="${ASPECT_COLORS[k]}" fill-opacity=".13" stroke="${ASPECT_COLORS[k]}" stroke-width="1.5"/>`);
+  keys.forEach(k => { const [x, y] = pos[k], dx = (x - 100) * .9, dy = (y - 77) * .9;
+    svg += lab(x + dx, y + dy - 4, k, 600) + lab(x + dx, y + dy + 10, "~" + singles[k].estimate); });
+  const mid = (a, b) => [(pos[a][0] + pos[b][0]) / 2, (pos[a][1] + pos[b][1]) / 2];
+  for (let i = 0; i < keys.length; i++) for (let j = i + 1; j < keys.length; j++) {
+    const [x, y] = mid(keys[i], keys[j]), c = cnt([keys[i], keys[j]]);
+    if (c !== undefined) svg += lab(x + (x - 100) * .25, y + (y - 77) * .25 + 4, c);
+  }
+  if (keys.length === 3) svg += lab(100, 81, cnt(keys), 700);
+  return svg + "</svg>";
+}
+async function showAspects(parts, q) {
+  const body = document.getElementById("panelbody");
+  const qs = new URLSearchParams(Object.entries(parts).filter(([, v]) => v.trim())).toString();
+  body.innerHTML = `<div class="note">Checking each part, then reading the candidate papers' sentences to confirm matches… (about 10 seconds)</div>`;
+  let r;
+  try { r = await api(`/api/aspects?${qs}`); } catch (e) { toast(e.message); return; }
+  const evid = (p, keys) => keys.map(k => `<div class="meta"><span style="color:${ASPECT_COLORS[k]};font-weight:600">${k}</span>
+      <span style="color:var(--muted)">“${esc(trunc(p.evidence[k] || "", 150))}”</span></div>`).join("");
+  const plist = (papers, keys) => papers.map(p => `<div class="paper"><a class="t" href="${p.url}" target="_blank" rel="noopener">${esc(p.title)}</a>
+      <div class="meta"><span class="tag" style="${p.strength === "strong" ? "border-color:var(--accent);color:var(--accent)" : ""}">${{ strong: "strong match", possible: "possible match", below: "below the match bar" }[p.strength]}</span><span class="age">public ${ago(p.announced)}</span><a class="tag" style="cursor:pointer;text-decoration:none" data-lin="${p.id}">lineage</a></div>${evid(p, keys)}</div>`).join("");
+  const full = r.combos[r.combos.length - 1];
+  body.innerHTML = `
+    <div class="crumbs">Combination check</div>
+    <h2 style="font-size:15px">${Object.entries(r.parts).map(([k, v]) => `<span style="color:${ASPECT_COLORS[k]}">${esc(v)}</span>`).join(" + ")}</h2>
+    <div class="hint">${esc(r.verdict.text)}</div>
+    ${vennSVG(r.singles, r.combos)}
+    <div class="note" style="text-align:center">single parts: approximate number of related papers · overlaps: papers confirmed to cover those parts</div>
+    <div style="margin-top:10px"><button class="btn" id="backloc2">← Back to location</button></div>
+    <h3>${full.count ? `Papers combining all ${full.parts.length}` : "Closest to combining them (below the match bar)"}</h3>
+    ${full.count ? "" : `<div class="note">Shown so you can judge for yourself; none matched every part closely enough.</div>`}
+    ${plist(full.count ? full.papers : full.closest, full.parts)}
+    ${r.combos.filter(c => c !== full && c.count).map(c => `<h3>${c.parts.join(" + ")}: ${c.count}${c.capped ? "+" : ""} papers</h3>${plist(c.papers, c.parts)}`).join("")}
+    ${Object.entries(r.singles).map(([k, v]) => `<h3><span style="color:${ASPECT_COLORS[k]}">${k}</span> alone: ~${v.estimate} related papers</h3>${plist(v.papers, [k])}`).join("")}
+    <div class="note" style="margin-top:12px">Each paper is matched by its best abstract sentence (shown in quotes): embeddings shortlist the top ${r.thresholds.shortlist} candidates, then a reranker checks that the sentence really is about that part. "25+" means the shortlist was full.</div>
+    <h3>For agents</h3><pre>curl -s "localhost:${location.port}/api/aspects?${esc(qs)}"</pre>`;
+  bindPanel();
+  document.getElementById("backloc2").onclick = () => { document.getElementById("q").value = q; document.getElementById("locate").requestSubmit(); };
+}
+
+// ---------- reading list: what to read for an idea, from the citation lineage around it
+async function showReadingList(q) {
+  const body = document.getElementById("panelbody");
+  body.innerHTML = `<div class="note">Building your reading list from the lineage around your idea…</div>`;
+  const r = await api(`/api/reading?q=${encodeURIComponent(q)}`);
+  SELECTED = null; updateSeg();
+  setView("lineage");
+  document.getElementById("linback").style.display = "none";
+  const numbers = {};
+  r.order.flatMap(k => r.sections[k]).forEach((p, i) => numbers[p.id] = String(i + 1));
+  drawLineage(r.nodes, r.edges, null, numbers);
+  const titles = { foundations: "1 · Foundations", closest: "2 · Closest work", newest: "3 · Newest frontier" };
+  const blurbs = {
+    foundations: "What the papers nearest your idea build on. Read these first, oldest to newest.",
+    closest: "The most similar existing work. Position your idea against these.",
+    newest: "Recent papers in this neighbourhood, so you know what has just appeared.",
+  };
+  let n = 0;
+  const section = key => r.sections[key].length ? `
+    <h3>${titles[key]}</h3><div class="note" style="margin-bottom:4px">${blurbs[key]}</div>
+    ${r.sections[key].map(p => `<div class="paper" style="display:flex;gap:10px">
+        <div style="font:600 13px Inter;color:var(--faint);min-width:18px">${++n}</div>
+        <div style="flex:1">${paperHTML(p, false, true).replace(/^<div class="paper">|<\/div>$/g, "")}
+        <div class="meta" style="color:var(--accent)">${esc(p.reason)}</div></div></div>`).join("")}` : "";
+  body.innerHTML = `
+    <div class="crumbs">Reading list for</div>
+    <h2 style="font-size:15px">“${esc(trunc(q, 140))}”</h2>
+    <div class="note">Built from the ${r.coverage.neighbourhood} papers closest in meaning to your idea and what they cite
+      (references known for ${r.coverage.with_references} of them). Tested on real papers: lists like this contain
+      ~70% more of what authors actually cited than similarity search alone.</div>
+    <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn" id="copymd">Copy as Markdown</button>
+      <button class="btn" id="backloc">← Back to location</button></div>
+    ${section("foundations")}${section("closest")}${section("newest")}
+    ${r.classics.length ? `<h3>Classics you probably know</h3><div class="note">Cited all over the field, so not specific to your idea:
+      ${r.classics.map(c => `<a href="${c.url}" target="_blank" rel="noopener">${esc(trunc(c.title, 60))}</a>`).join(" · ")}</div>` : ""}
+    <h3>For agents</h3><pre>curl -s "localhost:${location.port}/api/reading?q=${encodeURIComponent(trunc(q, 60))}"</pre>`;
+  bindPanel();
+  document.getElementById("backloc").onclick = () => { setView("tree"); document.getElementById("locate").requestSubmit(); };
+  document.getElementById("copymd").onclick = async () => {
+    const md = [`# Reading list: ${q}`, ""].concat(...r.order.map(k => r.sections[k].length ? [`## ${titles[k]}`,
+      ...r.sections[k].map(p => `- [${p.title}](${p.url}) (${new Date(p.announced * 1000).getFullYear()}): ${p.reason}`), ""] : []));
+    try { await navigator.clipboard.writeText(md.join("\n")); toast("Reading list copied as Markdown."); }
+    catch { toast("Couldn't access the clipboard."); }
+  };
+}
+
+// ---------- live
+async function refreshTree(pulse = new Set()) {
+  TREE = await api("/api/tree");
+  TREE.children.forEach((b, i) => branchColor[b.id] = PALETTE[i % PALETTE.length]);
+  STATUS = TREE.status;
+  render(pulse);
+}
+function liveText() {
+  if (!STATUS) return;
+  const now = Date.now() / 1000;
+  const polled = STATUS.last_poll ? `checked ${ago(STATUS.last_poll)}` : "first check running";
+  const next = STATUS.next_announcement - now;
+  const lag = STATUS.median_lag_s != null ? ` · median catch time <b>${dur(STATUS.median_lag_s)}</b>` : "";
+  document.getElementById("livetext").innerHTML =
+    `<b>${STATUS.papers.toLocaleString()}</b> papers · ${polled}${STATUS.hot_window ? " · <b>watching the release window</b>" : ""} · next arXiv release in <b>${dur(next)}</b>${lag}`;
+  document.getElementById("dot").classList.toggle("err", !!STATUS.last_error);
+}
+setInterval(liveText, 1000);
+
+function connect() {
+  const es = new EventSource("/api/events");
+  es.onmessage = async m => {
+    const ev = JSON.parse(m.data);
+    if (ev.status) STATUS = ev.status;
+    if (ev.type === "papers") {
+      ev.papers.forEach(p => feed.unshift(p));
+      const pulse = new Set(ev.papers.flatMap(p => [p.node, p.branch, ...(findPath(p.node) || [])]));
+      await refreshTree(pulse);
+      const where = [...new Set(ev.papers.map(p => labelBranch(p.branch)))].slice(0, 3).join(", ");
+      toast(`${ev.papers.length} new paper${ev.papers.length > 1 ? "s" : ""} just landed: ${where}`);
+      if (SELECTED === "root" || !SELECTED) showOverview();
+    } else if (ev.type === "alerts") {
+      refreshAlertBadge(); toast("New papers matched one of your alerts.");
+    } else if (ev.type === "signal" || ev.type === "rebuilt" || ev.type === "refs") {
+      await refreshTree();
+    }
+    liveText();
+  };
+  es.onerror = () => { document.getElementById("dot").classList.add("err"); };
+}
+
+document.getElementById("expand").onclick = () => {
+  const walk = n => { OPEN.add(n.id); (n.children || []).forEach(walk); };
+  walk(TREE); render(); fit();
+};
+document.getElementById("collapse").onclick = () => { OPEN = new Set(["root"]); render(); fit(); };
+// ---------- lineage view
+let VIEW = "tree", LIN_NODE = null;
+const gLin = g.append("g").style("display", "none");
+function setView(v) {
+  VIEW = v;
+  gLinks.style("display", v === "tree" ? null : "none");
+  gNodes.style("display", v === "tree" ? null : "none");
+  gLin.style("display", v === "lineage" ? null : "none");
+  document.getElementById("v-tree").classList.toggle("on", v === "tree");
+  document.getElementById("v-lin").classList.toggle("on", v === "lineage");
+  document.getElementById("treetools").style.display = v === "tree" ? "flex" : "none";
+  document.getElementById("lintools").style.display = v === "lineage" ? "flex" : "none";
+  document.getElementById("legend-tree").style.display = v === "tree" ? "flex" : "none";
+  document.getElementById("legend-lin").style.display = v === "lineage" ? "flex" : "none";
+  if (v === "tree") { render(); setTimeout(() => SELECTED && SELECTED !== "root" ? focusNode(SELECTED) : fit(), 30); }
+}
+function updateSeg() {
+  const b = document.getElementById("v-lin");
+  b.disabled = !SELECTED || SELECTED === "root";
+}
+document.getElementById("v-tree").onclick = () => setView("tree");
+document.getElementById("v-lin").onclick = () => { if (SELECTED && SELECTED !== "root") showLineage(SELECTED); };
+document.getElementById("linback").onclick = () => LIN_NODE && showLineage(LIN_NODE);
+
+async function showLineage(nid) {
+  const d = await api(`/api/lineage/node/${encodeURIComponent(nid)}`);
+  LIN_NODE = nid; SELECTED = nid; updateSeg();
+  document.getElementById("linback").style.display = "none";
+  setView("lineage");
+  drawLineage(d.nodes, d.edges, null);
+  if (!document.querySelector(`#panelbody [data-linnode="${nid}"]`)) await showNode(nid);
+  const c = d.coverage, note = document.createElement("div");
+  note.className = "hint";
+  note.innerHTML = `Lineage view: ${c.shown_inside} papers from this ${d.path.length > 2 ? "topic" : "branch"} and ${c.shown_outside} intertwined papers from elsewhere. References known for ${c.with_references} of ${c.papers} papers. Click any paper to follow its ancestry.`;
+  document.getElementById("panelbody").prepend(note);
+}
+
+async function showPaperLineage(pid) {
+  const d = await api(`/api/lineage/paper/${encodeURIComponent(pid)}`);
+  if (!LIN_NODE) LIN_NODE = d.paper.node;
+  SELECTED = SELECTED && SELECTED !== "root" ? SELECTED : d.paper.node; updateSeg();
+  document.getElementById("linback").style.display = LIN_NODE ? "" : "none";
+  setView("lineage");
+  drawLineage(d.nodes, d.edges, pid);
+  const p = d.paper;
+  const src = { s2: "Semantic Scholar", html: "arXiv HTML (day-0 parse)" }[d.refs_source];
+  document.getElementById("panelbody").innerHTML = `
+    <div class="crumbs">${d.path.map(x => `<a data-id="${x.id}">${esc(x.label)}</a>`).join(" › ")}</div>
+    <h2><a href="${p.url}" target="_blank" rel="noopener" style="text-decoration:none">${esc(p.title)}</a></h2>
+    <div class="meta"><span class="age ${fresh(p.announced) ? "fresh" : ""}">public ${ago(p.announced)}</span><span>${esc(p.authors.join(", "))}</span></div>
+    <div class="stats" style="grid-template-columns:repeat(2,1fr)">
+      <div class="stat"><b>${p.built_on}</b><span>papers in the tree build on it</span></div>
+      <div class="stat"><b>${p.builds_on}</b><span>tree papers it builds on${d.refs_total ? ` (of ${d.refs_total} refs)` : ""}</span></div>
+    </div>
+    <div class="note" style="margin-top:8px">${src ? `References from ${src}.` : "References not loaded yet; they usually appear within a few days."}
+      ${p.built_on ? "" : " Nothing in the tree builds on this paper yet."}</div>
+    <div class="abs" style="margin-top:10px">${esc(p.abstract)}</div>
+    <h3>Builds on (most related first)</h3>
+    ${d.builds_on.length ? d.builds_on.map(q => paperHTML(q, false, true)).join("") : `<div class="note">No references to papers inside the tree.</div>`}
+    <h3>Built on by (newest first)</h3>
+    ${d.built_on_by.length ? d.built_on_by.map(q => paperHTML(q, false, true)).join("") : `<div class="note">Not built on yet.</div>`}
+    <h3>For agents</h3><pre>curl -s localhost:${location.port}/api/lineage/paper/${p.id}</pre>`;
+  bindPanel();
+}
+
+function drawLineage(nodes, edges, focus, labels = null) {
+  gLin.selectAll("*").remove();
+  if (!nodes.length) {
+    gLin.append("text").attr("x", 0).attr("y", 0).attr("fill", "var(--muted)").text("No references loaded for these papers yet.");
+    fit(0); return;
+  }
+  nodes = nodes.map(n => ({ ...n }));
+  const byId = new Map(nodes.map(n => [n.id, n]));
+  const links = edges.filter(e => byId.has(e.s) && byId.has(e.t)).map(e => ({ source: byId.get(e.t), target: byId.get(e.s), main: e.main })); // older -> newer
+  if (focus) return drawAncestry(nodes, links, focus);
+  // Rank-based time axis: papers are spread evenly left→right in date order, so dense recent
+  // months get room; tick labels show the actual dates.
+  const W = Math.max(760, Math.min(1900, nodes.length * 7));
+  // swimlanes: lanes holding papers from the selected topic first, then other branches by size
+  const laneCount = d3.rollup(nodes, v => ({ n: v.length, inside: v.some(m => m.inside || m.id === focus) }), n => n.lane);
+  const lanes = [...laneCount.entries()].sort((a, b) => (b[1].inside - a[1].inside) || (b[1].n - a[1].n)).map(e => e[0]);
+  const laneH = new Map(lanes.map(l => [l, Math.max(46, Math.sqrt(laneCount.get(l).n) * 15)]));
+  const laneY = new Map(); let acc = 0;
+  lanes.forEach(l => { laneY.set(l, acc + laneH.get(l) / 2); acc += laneH.get(l); });
+  const H = acc;
+  const sorted = [...nodes].sort((a, b) => a.announced - b.announced);
+  const rank = new Map(); sorted.forEach((n, i) => rank.set(n.id, i));
+  const xr = n => sorted.length > 1 ? (rank.get(n.id) / (sorted.length - 1)) * W : W / 2;
+  const R = n => n.id === focus ? 9 : n.inside ? 5.5 : 4.5;
+  nodes.forEach(n => { n.tx = xr(n); n.x = n.tx; n.y = laneY.get(n.lane) + (Math.random() - .5) * laneH.get(n.lane) * .6; });
+  const sim = d3.forceSimulation(nodes)
+    .force("x", d3.forceX(n => n.tx).strength(0.9))
+    .force("y", d3.forceY(n => laneY.get(n.lane)).strength(0.25))
+    .force("collide", d3.forceCollide(n => R(n) + 3))
+    .force("charge", d3.forceManyBody().strength(-6).distanceMax(80))
+    .stop();
+  for (let i = 0; i < 320; i++) sim.tick();
+  const maxY = Math.max(H, d3.max(nodes, n => n.y) + 12) + 22;
+  const lg = gLin.append("g");
+  lanes.forEach((l, i) => {
+    const y0 = laneY.get(l) - laneH.get(l) / 2;
+    if (i) lg.append("line").attr("x1", -10).attr("x2", W + 10).attr("y1", y0).attr("y2", y0).attr("stroke", "var(--line)").attr("stroke-dasharray", "3,4");
+    lg.append("text").attr("x", -16).attr("y", laneY.get(l)).attr("dy", "0.32em").attr("text-anchor", "end")
+      .attr("font-size", 11.5).attr("font-weight", laneCount.get(l).inside ? 600 : 400)
+      .attr("fill", laneCount.get(l).inside ? "var(--ink)" : "var(--faint)").text(trunc(l, 34));
+  });
+  const nt = Math.max(3, Math.min(9, Math.round(W / 170)));
+  const ticks = d3.range(nt).map(i => sorted[Math.round(i * (sorted.length - 1) / Math.max(1, nt - 1))]);
+  const ax = gLin.append("g").attr("class", "axis").attr("transform", `translate(0,${maxY})`);
+  ax.append("line").attr("x1", 0).attr("x2", W).attr("stroke", "var(--line)");
+  const fmt = d3.timeFormat("%b %Y");
+  ax.selectAll("g").data(ticks).join("g").attr("transform", n => `translate(${xr(n)},0)`)
+    .call(t => { t.append("line").attr("y2", 5).attr("stroke", "var(--line)"); t.append("text").attr("y", 18).attr("text-anchor", "middle").text(n => fmt(new Date(n.announced * 1000))); });
+  ax.append("text").attr("x", W).attr("y", 34).attr("text-anchor", "end").text("time (stretched where papers are dense)");
+  const curve = l => `M${l.source.x},${l.source.y} C${(l.source.x + l.target.x) / 2},${l.source.y} ${(l.source.x + l.target.x) / 2},${l.target.y} ${l.target.x},${l.target.y}`;
+  const lsel = gLin.append("g").selectAll("path").data(links.sort((a, b) => a.main - b.main)).join("path")
+    .attr("class", l => "lin-link" + (l.main ? " main" : "")).attr("d", curve);
+  const nsel = gLin.append("g").selectAll("g").data(nodes).join("g")
+    .attr("class", n => "lin-node" + (n.id === focus ? " focus" : ""))
+    .attr("transform", n => `translate(${n.x},${n.y})`);
+  nsel.append("circle").attr("r", R)
+    .attr("fill", n => n.built_on ? branchColor[n.branch] || "var(--muted)" : "var(--bg)")
+    .attr("stroke", n => branchColor[n.branch] || "var(--muted)")
+    .attr("stroke-width", n => n.id === focus ? 3 : 1.8)
+    .attr("stroke-dasharray", n => n.inside ? null : "2,2")
+    .attr("opacity", n => n.inside || n.id === focus ? 1 : .8);
+  const newest = new Set([...nodes].filter(n => n.inside).sort((a, b) => b.announced - a.announced).slice(0, 5).map(n => n.id));
+  if (labels) {   // reading list: number each paper as in the list
+    nsel.filter(n => labels[n.id]).append("text").attr("x", n => R(n) + 3).attr("dy", "-0.6em")
+      .style("font-weight", 600).style("fill", "var(--ink)").text(n => labels[n.id]);
+  } else nsel.filter(n => focus || newest.has(n.id) || n.id === focus).append("text")
+    .attr("x", n => R(n) + 4).attr("dy", "0.32em").text(n => trunc(n.title, focus && n.id !== focus ? 46 : 60));
+  // hover: highlight the paper's lineage within this view
+  const up = new Map(nodes.map(n => [n.id, []])), down = new Map(nodes.map(n => [n.id, []]));
+  links.forEach(l => { down.get(l.source.id).push(l.target.id); up.get(l.target.id).push(l.source.id); });
+  const reach = (start, adj) => { const seen = new Set([start]), st = [start]; while (st.length) for (const q of adj.get(st.pop())) if (!seen.has(q)) { seen.add(q); st.push(q); } return seen; };
+  const tip = document.getElementById("tip");
+  nsel.on("mouseenter", (e, n) => {
+    const keep = new Set([...reach(n.id, up), ...reach(n.id, down)]);
+    nsel.classed("dim", m => !keep.has(m.id));
+    lsel.classed("dim", l => !(keep.has(l.source.id) && keep.has(l.target.id))).classed("hl", l => keep.has(l.source.id) && keep.has(l.target.id));
+    const r = document.getElementById("treewrap").getBoundingClientRect();
+    tip.style.display = "block";
+    tip.style.left = Math.min(e.clientX - r.left + 14, r.width - 330) + "px";
+    tip.style.top = (e.clientY - r.top + 14) + "px";
+    tip.innerHTML = `<b>${esc(n.title)}</b>${new Date(n.announced * 1000).toISOString().slice(0, 10)} · ${esc(labelBranch(n.branch))} › ${esc(n.topic || "")}<br>
+      <span class="explored">${n.built_on ? `built on by ${n.built_on} in the tree` : "not built on yet"} · builds on ${n.builds_on}${n.refs_known ? "" : " (references not loaded yet)"}</span>`;
+  }).on("mouseleave", () => {
+    nsel.classed("dim", false); lsel.classed("dim", false).classed("hl", false); tip.style.display = "none";
+  }).on("click", (e, n) => { e.stopPropagation(); tip.style.display = "none"; showPaperLineage(n.id); });
+  fit(400);
+}
+
+// One paper: generations as columns (ancestors left, descendants right), stacked by date.
+function drawAncestry(nodes, links, focus) {
+  const colW = 300, rowH = 22;
+  const cols = d3.group(nodes, n => n.level || 0);
+  const names = { "-3": "3 steps back", "-2": "2 steps back", "-1": "builds on", "0": "this paper", "1": "built on by", "2": "2 steps forward" };
+  let maxRows = 0;
+  cols.forEach((arr, lvl) => {
+    arr.sort((a, b) => (a.lane > b.lane) - (a.lane < b.lane) || a.announced - b.announced);
+    maxRows = Math.max(maxRows, arr.length);
+    arr.forEach((n, i) => { n.x = lvl * colW; n.y = (i - (arr.length - 1) / 2) * rowH; });
+  });
+  [...cols.keys()].forEach(lvl => gLin.append("text").attr("x", lvl * colW).attr("y", -(maxRows / 2) * rowH - 16)
+    .attr("text-anchor", "start").attr("font-size", 11).attr("font-weight", 600).attr("fill", "var(--faint)")
+    .text((names[lvl] || `${lvl} steps`).toUpperCase()));
+  const curve = l => `M${l.source.x},${l.source.y} C${(l.source.x + l.target.x) / 2},${l.source.y} ${(l.source.x + l.target.x) / 2},${l.target.y} ${l.target.x},${l.target.y}`;
+  const lsel = gLin.append("g").selectAll("path").data(links.sort((a, b) => a.main - b.main)).join("path")
+    .attr("class", l => "lin-link" + (l.main || l.source.id === focus || l.target.id === focus ? " main" : "")).attr("d", curve);
+  const nsel = gLin.append("g").selectAll("g").data(nodes).join("g")
+    .attr("class", n => "lin-node" + (n.id === focus ? " focus" : "")).attr("transform", n => `translate(${n.x},${n.y})`);
+  nsel.append("circle").attr("r", n => n.id === focus ? 8 : 5)
+    .attr("fill", n => n.built_on ? branchColor[n.branch] || "var(--muted)" : "var(--bg)")
+    .attr("stroke", n => branchColor[n.branch] || "var(--muted)").attr("stroke-width", n => n.id === focus ? 3 : 1.8)
+    .attr("stroke-dasharray", n => n.inside ? null : "2,2");
+  nsel.append("text").attr("x", 9).attr("dy", "0.32em")
+    .text(n => trunc(n.title, n.id === focus ? 52 : 40) + " · " + new Date(n.announced * 1000).getFullYear());
+  const up = new Map(nodes.map(n => [n.id, []])), down = new Map(nodes.map(n => [n.id, []]));
+  links.forEach(l => { down.get(l.source.id).push(l.target.id); up.get(l.target.id).push(l.source.id); });
+  const reach = (start, adj) => { const seen = new Set([start]), st = [start]; while (st.length) for (const q of adj.get(st.pop())) if (!seen.has(q)) { seen.add(q); st.push(q); } return seen; };
+  const tip = document.getElementById("tip");
+  nsel.on("mouseenter", (e, n) => {
+    const keep = new Set([...reach(n.id, up), ...reach(n.id, down)]);
+    nsel.classed("dim", m => !keep.has(m.id));
+    lsel.classed("dim", l => !(keep.has(l.source.id) && keep.has(l.target.id))).classed("hl", l => keep.has(l.source.id) && keep.has(l.target.id));
+    const r = document.getElementById("treewrap").getBoundingClientRect();
+    tip.style.display = "block";
+    tip.style.left = Math.min(e.clientX - r.left + 14, r.width - 330) + "px";
+    tip.style.top = (e.clientY - r.top + 14) + "px";
+    tip.innerHTML = `<b>${esc(n.title)}</b>${new Date(n.announced * 1000).toISOString().slice(0, 10)} · ${esc(labelBranch(n.branch))} › ${esc(n.topic || "")}<br>
+      <span class="explored">${n.built_on ? `built on by ${n.built_on} in the tree` : "not built on yet"} · builds on ${n.builds_on}</span>`;
+  }).on("mouseleave", () => {
+    nsel.classed("dim", false); lsel.classed("dim", false).classed("hl", false); tip.style.display = "none";
+  }).on("click", (e, n) => { e.stopPropagation(); tip.style.display = "none"; if (n.id !== focus) showPaperLineage(n.id); });
+  fit(400);
+}
+
+document.getElementById("home").onclick = () => { OPEN = new Set(["root"]); SELECTED = "root"; render(); fit(); showOverview(); };
+svg.on("click", () => {});
+
+(async () => {
+  await refreshTree();
+  fit(0);
+  showOverview();
+  liveText();
+  connect();
+  refreshAlertBadge();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+# Pinned to the versions that built data/model.pkl (sklearn pickles need the same version to load).
+numpy==2.1.3
+scikit-learn==1.6.1
+fastembed==0.8.1   # meaning-based search; the app falls back to TF-IDF/LSA without it
+mcp==2.3.0         # MCP server for agents (mcp_server.py)

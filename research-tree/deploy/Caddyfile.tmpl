@@ -1,0 +1,22 @@
+# HTTPS + password in front of the app. setup.sh fills in SITE, USER and HASH.
+__SITE__ {
+	encode gzip
+	# uptime monitors can check health without the password
+	@health path /api/health
+	handle @health {
+		reverse_proxy 127.0.0.1:8765
+	}
+	# alert feeds: feed readers can't log in; the unguessable token in the link protects each feed
+	@feed path /feed/*
+	handle @feed {
+		reverse_proxy 127.0.0.1:8765
+	}
+	handle {
+		basic_auth {
+			__USER__ __HASH__
+		}
+		reverse_proxy 127.0.0.1:8765 {
+			flush_interval -1   # keep the live event stream (SSE) streaming
+		}
+	}
+}
