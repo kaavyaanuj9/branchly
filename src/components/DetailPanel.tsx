@@ -22,6 +22,7 @@ import { useStore } from "@/lib/store";
 import { childrenOf, findNode } from "@/lib/tree";
 import type { TreeNode } from "@/lib/types";
 import { StatusBadge } from "./StatusBadge";
+import { AssignmentSection } from "./Assignment";
 import { useUI } from "./uiContext";
 
 // The middle column: everything about the selected box. Where it came from,
@@ -46,7 +47,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 export function DetailPanel({ node }: { node: TreeNode }) {
-  const { state, dispatch } = useStore();
+  const { state, dispatch, canEdit } = useStore();
   const { openEditor, openUpload, chatOpen, setChatOpen, openPaperSearch, openDecompose } = useUI();
 
   const parent = findNode(state.nodes, node.parentId);
@@ -95,7 +96,7 @@ export function DetailPanel({ node }: { node: TreeNode }) {
       <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5">
         <div className="space-y-3">
           <p className="text-[17px] font-medium leading-snug text-slate-900">{node.title}</p>
-          {node.kind !== "suggestion" && (
+          {node.kind !== "suggestion" && canEdit && (
             <div className="flex flex-wrap gap-1.5">
               <SmallButton onClick={() => openEditor({ mode: "edit", id: node.id })}>
                 <Pencil className="size-3" /> Edit
@@ -153,6 +154,8 @@ export function DetailPanel({ node }: { node: TreeNode }) {
           )}
         </div>
 
+        {node.kind === "hypothesis" && !node.folded && <AssignmentSection node={node} />}
+
         {node.folded && node.foldedReason && (
           <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3 text-[13px] leading-relaxed text-slate-600">
             <span className="font-semibold text-slate-700">Folded away, not deleted. </span>
@@ -161,7 +164,7 @@ export function DetailPanel({ node }: { node: TreeNode }) {
         )}
 
         {/* Suggestion approval */}
-        {node.kind === "suggestion" && (
+        {node.kind === "suggestion" && canEdit && (
           <div className="space-y-3 rounded-xl border border-dashed border-sky-300 bg-sky-50/60 p-4">
             <p className="text-[13px] leading-relaxed text-slate-700">
               The AI suggested this after an unexpected result. Nothing changes in your tree until
@@ -272,14 +275,16 @@ export function DetailPanel({ node }: { node: TreeNode }) {
               </div>
             </Section>
           ) : (
-            <button
-              onClick={() => openUpload(node.id)}
-              className="flex w-full flex-col items-center gap-1 rounded-xl border-2 border-dashed border-slate-200 py-6 text-slate-500 transition hover:border-rose-300 hover:bg-rose-50/40 hover:text-rose-700"
-            >
-              <Upload className="size-5" />
-              <span className="text-sm font-medium">Upload results</span>
-              <span className="text-xs text-slate-400">Data, graphs or short notes</span>
-            </button>
+            canEdit && (
+              <button
+                onClick={() => openUpload(node.id)}
+                className="flex w-full flex-col items-center gap-1 rounded-xl border-2 border-dashed border-slate-200 py-6 text-slate-500 transition hover:border-rose-300 hover:bg-rose-50/40 hover:text-rose-700"
+              >
+                <Upload className="size-5" />
+                <span className="text-sm font-medium">Upload results</span>
+                <span className="text-xs text-slate-400">Data, graphs or short notes</span>
+              </button>
+            )
           ))}
 
         {suggestions.length > 0 && (
@@ -297,18 +302,22 @@ export function DetailPanel({ node }: { node: TreeNode }) {
                     {s.title}
                   </button>
                   <div className="mt-2 flex items-center gap-2">
-                    <button
-                      onClick={() => dispatch({ type: "approveSuggestion", id: s.id })}
-                      className="flex items-center gap-1 rounded-md bg-sky-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-sky-700"
-                    >
-                      <Check className="size-3" /> Approve
-                    </button>
-                    <button
-                      onClick={() => dispatch({ type: "dismissSuggestion", id: s.id })}
-                      className="rounded-md px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100"
-                    >
-                      Dismiss
-                    </button>
+                    {canEdit && (
+                      <>
+                        <button
+                          onClick={() => dispatch({ type: "approveSuggestion", id: s.id })}
+                          className="flex items-center gap-1 rounded-md bg-sky-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-sky-700"
+                        >
+                          <Check className="size-3" /> Approve
+                        </button>
+                        <button
+                          onClick={() => dispatch({ type: "dismissSuggestion", id: s.id })}
+                          className="rounded-md px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100"
+                        >
+                          Dismiss
+                        </button>
+                      </>
+                    )}
                     {s.lens && <span className="ml-auto text-[11px] text-sky-600">{s.lens}</span>}
                   </div>
                 </div>
@@ -342,21 +351,25 @@ export function DetailPanel({ node }: { node: TreeNode }) {
                     )}
                   </p>
                 </div>
-                <button
-                  onClick={() => dispatch({ type: "removeEvidence", id: node.id, index: i })}
-                  title="Remove this evidence"
-                  className="rounded p-1 text-slate-400 opacity-0 transition hover:bg-slate-200 hover:text-rose-600 group-hover:opacity-100"
-                >
-                  <Trash2 className="size-3.5" />
-                </button>
+                {canEdit && (
+                  <button
+                    onClick={() => dispatch({ type: "removeEvidence", id: node.id, index: i })}
+                    title="Remove this evidence"
+                    className="rounded p-1 text-slate-400 opacity-0 transition hover:bg-slate-200 hover:text-rose-600 group-hover:opacity-100"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
+                )}
               </div>
             ))}
-            <button
-              onClick={() => openPaperSearch(node.id)}
-              className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-200 bg-white py-2 text-xs font-medium text-slate-600 transition hover:border-indigo-300 hover:bg-indigo-50/40 hover:text-indigo-700"
-            >
-              <Search className="size-3" /> Search Semantic Scholar for papers
-            </button>
+            {canEdit && (
+              <button
+                onClick={() => openPaperSearch(node.id)}
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-200 bg-white py-2 text-xs font-medium text-slate-600 transition hover:border-indigo-300 hover:bg-indigo-50/40 hover:text-indigo-700"
+              >
+                <Search className="size-3" /> Search Semantic Scholar for papers
+              </button>
+            )}
           </div>
         </Section>
 
@@ -381,7 +394,7 @@ export function DetailPanel({ node }: { node: TreeNode }) {
           <MessageSquare className="size-4" />
           {chatOpen ? "Hide AI discussion" : "Discuss with AI"}
         </button>
-        {kids.length > 0 && (
+        {kids.length > 0 && canEdit && (
           <button
             onClick={() => dispatch({ type: "toggleCollapse", id: node.id })}
             className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"

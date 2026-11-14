@@ -2,20 +2,45 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
-  useReducer,
+  useRef,
+  useState,
   type ReactNode,
 } from "react";
-import type { ChatMessage, Evidence, ExperimentResult, TreeNode } from "./types";
-import { sampleProject } from "./sampleData";
+import {
+  arrayRemove,
+  arrayUnion,
+  collection,
+  doc,
+  onSnapshot,
+  orderBy,
+  query,
+  updateDoc,
+  writeBatch,
+} from "firebase/firestore";
+import { getDb } from "./firebase/client";
+import { sameProgress, treeProgress } from "./progress";
+import type {
+  ChatMessage,
+  Evidence,
+  ExperimentResult,
+  TreeNode,
+  TreeProgress,
+  WorkStage,
+} from "./types";
 import { descendantIds, findNode } from "./tree";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// The "store": a single place holding all of the app's data, plus a list of
-// actions that change it. Every component reads from here, so the tree,
-// the detail panel and the chat always agree with each other.
-// Changes are saved in your browser (localStorage), so they survive a refresh.
+// The "store": a single place holding one tree's data, plus a list of actions
+// that change it. Every component reads from here, so the tree, the detail
+// panel and the chat always agree with each other.
+//
+// The tree lives in Firestore (teams/{teamId}/trees/{treeId}) so teammates can
+// work on it together. Actions are applied locally right away, then the nodes
+// and messages they changed are written in one batch. Live listeners bring in
+// everyone else's edits.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface AppState {
@@ -23,21 +48,23 @@ export interface AppState {
   nodes: TreeNode[];
   selectedId: string | null;
   chats: Record<string, ChatMessage[]>;
-  /** True once saved work (if any) has been loaded from the browser. */
+  /** True once the tree, its nodes and its chat have arrived from Firestore. */
   hydrated: boolean;
+  /** The tree was deleted, or you no longer have access to it. */
+  missing: boolean;
 }
 
 const initialState: AppState = {
-  title: sampleProject.title,
-  nodes: sampleProject.nodes,
+  title: "",
+  nodes: [],
   selectedId: null,
   chats: {},
   hydrated: false,
+  missing: false,
 };
 
 type Action =
-  | { type: "load"; saved: Partial<AppState> | null }
-  | { type: "reset" }
+  | { type: "remote"; patch: Partial<Pick<AppState, "title" | "nodes" | "chats" | "missing">> }
   | { type: "select"; id: string | null }
   | { type: "addNode"; node: TreeNode; select?: boolean }
   | { type: "updateNode"; id: string; patch: Partial<TreeNode> }
@@ -60,7 +87,13 @@ type Action =
       patch: Partial<ChatMessage>;
     }
   | { type: "addEvidence"; id: string; evidence: Evidence }
-  | { type: "removeEvidence"; id: string; index: number };
+  | { type: "removeEvidence"; id: string; index: number }
+  | { type: "assign"; id: string; uid: string }
+  | { type: "unassign"; id: string; uid: string }
+  | { type: "setStage"; id: string; stage: WorkStage };
+
+/** Actions a viewer may take: looking around and chatting with the AI. */
+const VIEWER_ACTIONS = new Set<Action["type"]>(["remote", "select", "addMessage"]);
 
 export const newId = () =>
   Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
@@ -71,11 +104,8 @@ function patchNode(nodes: TreeNode[], id: string, patch: Partial<TreeNode>) {
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
-    case "load":
-      return { ...initialState, ...action.saved, selectedId: null, hydrated: true };
-
-    case "reset":
-      return { ...initialState, hydrated: true };
+    case "remote":
+      return { ...state, ...action.patch };
 
     case "select":
       return { ...state, selectedId: action.id };
@@ -247,6 +277,30 @@ function reducer(state: AppState, action: Action): AppState {
       };
     }
 
+    case "assign":
+    case "unassign": {
+      const target = findNode(state.nodes, action.id);
+      if (!target) return state;
+      const current = target.assignees ?? [];
+      const has = current.includes(action.uid);
+      if (has === (action.type === "assign")) return state;
+      return {
+        ...state,
+        nodes: patchNode(state.nodes, action.id, {
+          assignees:
+            action.type === "assign"
+              ? [...current, action.uid]
+              : current.filter((u) => u !== action.uid),
+        }),
+      };
+    }
+
+    case "setStage": {
+      const target = findNode(state.nodes, action.id);
+      if (!target || (target.stage ?? "not_started") === action.stage) return state;
+      return { ...state, nodes: patchNode(state.nodes, action.id, { stage: action.stage }) };
+    }
+
     case "removeEvidence": {
       const target = findNode(state.nodes, action.id);
       if (!target) return state;
@@ -260,40 +314,183 @@ function reducer(state: AppState, action: Action): AppState {
   }
 }
 
-const STORAGE_KEY = "hypotree-state-v1";
-
 const StoreContext = createContext<{
   state: AppState;
-  dispatch: React.Dispatch<Action>;
+  dispatch: (action: Action) => void;
+  canEdit: boolean;
 } | null>(null);
 
-export function StoreProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, initialState);
+type StoredMessage = ChatMessage & { nodeId: string; order: number };
 
-  // Load saved work from the browser once, when the page opens.
+function flattenChats(chats: AppState["chats"]) {
+  const out = new Map<string, { message: ChatMessage; nodeId: string }>();
+  for (const [nodeId, messages] of Object.entries(chats)) {
+    for (const message of messages) out.set(message.id, { message, nodeId });
+  }
+  return out;
+}
+
+export function StoreProvider({
+  teamId,
+  treeId,
+  canEdit,
+  children,
+}: {
+  teamId: string;
+  treeId: string;
+  canEdit: boolean;
+  children: ReactNode;
+}) {
+  const [state, setState] = useState(initialState);
+  // The latest state, readable synchronously by dispatch and the listeners.
+  const stateRef = useRef(state);
+  const canEditRef = useRef(canEdit);
   useEffect(() => {
-    let saved: Partial<AppState> | null = null;
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) saved = JSON.parse(raw);
-    } catch {
-      /* saved data unreadable: start from the sample project */
-    }
-    dispatch({ type: "load", saved });
+    canEditRef.current = canEdit;
+  }, [canEdit]);
+
+  const commit = useCallback((next: AppState) => {
+    stateRef.current = next;
+    setState(next);
   }, []);
 
-  // Save every change (only after saved work has been loaded).
+  // Live listeners for the tree's title, its nodes and its chat messages.
   useEffect(() => {
-    if (!state.hydrated) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch {
-      /* storage full or blocked: keep working without saving */
-    }
-  }, [state]);
+    const treeRef = doc(getDb(), "teams", teamId, "trees", treeId);
+    const loaded = { tree: false, nodes: false, messages: false };
+    let storedProgress: TreeProgress | undefined;
+
+    // Trees made before progress tracking (or edited by an old client) may have
+    // a stale summary for the team page. Editors quietly fix it.
+    const healSummary = () => {
+      if (!canEditRef.current || !loaded.tree || !loaded.nodes || stateRef.current.missing) return;
+      const actual = treeProgress(stateRef.current.nodes);
+      if (sameProgress(storedProgress, actual)) return;
+      storedProgress = actual;
+      updateDoc(treeRef, { progress: actual }).catch(() => {});
+    };
+
+    const apply = (which: keyof typeof loaded, patch: Partial<AppState>) => {
+      loaded[which] = true;
+      const prev = stateRef.current;
+      commit({
+        ...reducer(prev, { type: "remote", patch }),
+        hydrated: loaded.tree && loaded.nodes && loaded.messages,
+      });
+      healSummary();
+    };
+    const lostAccess = () => apply("tree", { missing: true });
+
+    const unsubs = [
+      onSnapshot(
+        treeRef,
+        (snap) => {
+          storedProgress = snap.get("progress") as TreeProgress | undefined;
+          apply("tree", snap.exists() ? { title: snap.get("title") ?? "" } : { missing: true });
+        },
+        lostAccess,
+      ),
+      onSnapshot(
+        collection(treeRef, "nodes"),
+        (snap) => {
+          const nodes = snap.docs.map((d) => d.data() as TreeNode);
+          nodes.sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.id.localeCompare(b.id));
+          apply("nodes", { nodes });
+        },
+        lostAccess,
+      ),
+      onSnapshot(
+        query(collection(treeRef, "messages"), orderBy("order")),
+        (snap) => {
+          const chats: AppState["chats"] = {};
+          for (const d of snap.docs) {
+            const { nodeId, order: _order, ...message } = d.data() as StoredMessage;
+            void _order;
+            (chats[nodeId] ??= []).push(message);
+          }
+          apply("messages", { chats });
+        },
+        lostAccess,
+      ),
+    ];
+    return () => unsubs.forEach((u) => u());
+  }, [teamId, treeId, commit]);
+
+  // Apply an action locally, then write whatever it changed to Firestore.
+  const dispatch = useCallback(
+    (action: Action) => {
+      if (!canEditRef.current && !VIEWER_ACTIONS.has(action.type)) return;
+      const prev = stateRef.current;
+      const next = reducer(prev, action);
+      if (next === prev) return;
+      commit(next);
+      if (action.type === "select" || action.type === "remote") return;
+
+      const db = getDb();
+      const treeRef = doc(db, "teams", teamId, "trees", treeId);
+      const batch = writeBatch(db);
+      const touchTree = () =>
+        batch.update(treeRef, { updatedAt: Date.now(), progress: treeProgress(next.nodes) });
+
+      // Assignment and stage change one field, and teammates often click
+      // "work on this" at the same moment, so update just that field (merging
+      // assignee lists) instead of rewriting the whole node.
+      if (action.type === "assign" || action.type === "unassign" || action.type === "setStage") {
+        batch.update(
+          doc(treeRef, "nodes", action.id),
+          action.type === "setStage"
+            ? { stage: action.stage }
+            : {
+                assignees:
+                  action.type === "assign" ? arrayUnion(action.uid) : arrayRemove(action.uid),
+              },
+        );
+        touchTree();
+        batch.commit().catch((e) => console.error("Couldn't save your change", e));
+        return;
+      }
+
+      let writes = 0;
+      let seq = Date.now();
+
+      // Nodes: the reducer keeps untouched nodes as the same objects, so any
+      // new object is a new or changed node.
+      const before = new Map(prev.nodes.map((n) => [n.id, n]));
+      const after = new Set<string>();
+      for (const node of next.nodes) {
+        after.add(node.id);
+        if (before.get(node.id) === node) continue;
+        batch.set(doc(treeRef, "nodes", node.id), node.order == null ? { ...node, order: seq++ } : node);
+        writes++;
+      }
+      for (const id of before.keys()) {
+        if (!after.has(id)) {
+          batch.delete(doc(treeRef, "nodes", id));
+          writes++;
+        }
+      }
+
+      // Messages: new, edited, or moved to another node (approveSuggestion).
+      const oldMessages = flattenChats(prev.chats);
+      for (const [id, { message, nodeId }] of flattenChats(next.chats)) {
+        const old = oldMessages.get(id);
+        if (old && old.message === message && old.nodeId === nodeId) continue;
+        const order = old ? undefined : seq++;
+        const data = { ...message, nodeId, ...(order != null && { order }) };
+        batch.set(doc(treeRef, "messages", id), data, { merge: Boolean(old) });
+        writes++;
+      }
+
+      if (!writes) return;
+      // Viewers may only add chat messages, so they can't touch the tree doc.
+      if (canEditRef.current) touchTree();
+      batch.commit().catch((e) => console.error("Couldn't save your change", e));
+    },
+    [teamId, treeId, commit],
+  );
 
   return (
-    <StoreContext.Provider value={{ state, dispatch }}>
+    <StoreContext.Provider value={{ state, dispatch, canEdit }}>
       {children}
     </StoreContext.Provider>
   );

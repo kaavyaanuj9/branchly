@@ -14,6 +14,8 @@ import {
   X,
 } from "lucide-react";
 import type { TreeNode } from "@/lib/types";
+import { experimentProgress, stageOf } from "@/lib/progress";
+import { AvatarStack, StagePill } from "./Assignment";
 import { useStore } from "@/lib/store";
 import { NODE_WIDTH } from "@/lib/tree";
 import { StatusBadge } from "./StatusBadge";
@@ -28,7 +30,7 @@ export type HypoFlowNode = Node<
 
 export function HypoNode({ data, selected }: NodeProps<HypoFlowNode>) {
   const { node, depth, childCount, hiddenCount } = data;
-  const { dispatch } = useStore();
+  const { state, dispatch, canEdit } = useStore();
   const { openEditor, openPaperSearch } = useUI();
 
   const stop = (e: React.MouseEvent) => e.stopPropagation();
@@ -37,7 +39,7 @@ export function HypoNode({ data, selected }: NodeProps<HypoFlowNode>) {
     <>
       <Handle type="target" position={Position.Top} className="!opacity-0" />
       <Handle type="source" position={Position.Bottom} className="!opacity-0" />
-      {childCount > 0 && !node.folded && (
+      {childCount > 0 && !node.folded && canEdit && (
         <button
           onClick={(e) => {
             stop(e);
@@ -69,15 +71,17 @@ export function HypoNode({ data, selected }: NodeProps<HypoFlowNode>) {
           <span className="flex items-center gap-1 text-[8.5px] font-bold uppercase tracking-wider">
             <Archive className="size-3" /> Folded away
           </span>
-          <button
-            onClick={(e) => {
-              stop(e);
-              dispatch({ type: "setFolded", id: node.id, folded: false });
-            }}
-            className="nodrag rounded px-1.5 py-0.5 text-[9.5px] font-medium text-slate-500 hover:bg-slate-200"
-          >
-            Unfold
-          </button>
+          {canEdit && (
+            <button
+              onClick={(e) => {
+                stop(e);
+                dispatch({ type: "setFolded", id: node.id, folded: false });
+              }}
+              className="nodrag rounded px-1.5 py-0.5 text-[9.5px] font-medium text-slate-500 hover:bg-slate-200"
+            >
+              Unfold
+            </button>
+          )}
         </div>
         <p className="line-clamp-2 text-[10.5px] leading-snug line-through decoration-slate-300">
           {node.title}
@@ -101,16 +105,18 @@ export function HypoNode({ data, selected }: NodeProps<HypoFlowNode>) {
           <span className="text-[8.5px] font-semibold uppercase tracking-wider text-slate-500">
             Paper hypothesis
           </span>
-          <button
-            onClick={(e) => {
-              stop(e);
-              openPaperSearch(node.id);
-            }}
-            title="Search Semantic Scholar for papers"
-            className="nodrag flex size-5 items-center justify-center rounded-full bg-slate-400 text-white transition hover:bg-indigo-600"
-          >
-            <BookOpen className="size-3" />
-          </button>
+          {canEdit && (
+            <button
+              onClick={(e) => {
+                stop(e);
+                openPaperSearch(node.id);
+              }}
+              title="Search Semantic Scholar for papers"
+              className="nodrag flex size-5 items-center justify-center rounded-full bg-slate-400 text-white transition hover:bg-indigo-600"
+            >
+              <BookOpen className="size-3" />
+            </button>
+          )}
         </div>
         <p className="text-[11.5px] font-semibold leading-snug text-slate-900">
           {node.title}
@@ -140,27 +146,29 @@ export function HypoNode({ data, selected }: NodeProps<HypoFlowNode>) {
         <p className="line-clamp-4 text-[10.5px] leading-snug text-slate-700">
           {node.title}
         </p>
-        <div className="mt-2 flex gap-1.5">
-          <button
-            onClick={(e) => {
-              stop(e);
-              dispatch({ type: "approveSuggestion", id: node.id });
-            }}
-            className="nodrag flex flex-1 items-center justify-center gap-1 rounded-md bg-sky-600 py-1 text-[10px] font-semibold text-white hover:bg-sky-700"
-          >
-            <Check className="size-3" /> Approve
-          </button>
-          <button
-            onClick={(e) => {
-              stop(e);
-              dispatch({ type: "dismissSuggestion", id: node.id });
-            }}
-            className="nodrag flex items-center justify-center rounded-md border border-sky-200 bg-white px-2 py-1 text-[10px] font-medium text-sky-700 hover:bg-sky-100"
-            title="Dismiss suggestion"
-          >
-            <X className="size-3" />
-          </button>
-        </div>
+        {canEdit && (
+          <div className="mt-2 flex gap-1.5">
+            <button
+              onClick={(e) => {
+                stop(e);
+                dispatch({ type: "approveSuggestion", id: node.id });
+              }}
+              className="nodrag flex flex-1 items-center justify-center gap-1 rounded-md bg-sky-600 py-1 text-[10px] font-semibold text-white hover:bg-sky-700"
+            >
+              <Check className="size-3" /> Approve
+            </button>
+            <button
+              onClick={(e) => {
+                stop(e);
+                dispatch({ type: "dismissSuggestion", id: node.id });
+              }}
+              className="nodrag flex items-center justify-center rounded-md border border-sky-200 bg-white px-2 py-1 text-[10px] font-medium text-sky-700 hover:bg-sky-100"
+              title="Dismiss suggestion"
+            >
+              <X className="size-3" />
+            </button>
+          </div>
+        )}
         <Handle type="target" position={Position.Top} className="!opacity-0" />
         <Handle type="source" position={Position.Bottom} className="!opacity-0" />
       </div>
@@ -185,6 +193,7 @@ export function HypoNode({ data, selected }: NodeProps<HypoFlowNode>) {
         ring: "ring-indigo-500",
       };
   const Icon = isExp ? FlaskConical : depth <= 1 ? GitBranch : Search;
+  const expProgress = experimentProgress(state.nodes, node.id);
 
   return (
     <div
@@ -217,23 +226,38 @@ export function HypoNode({ data, selected }: NodeProps<HypoFlowNode>) {
         {node.title}
       </p>
 
-      <div className="mt-1.5 flex min-h-5 items-end justify-between">
-        <span>
+      <div className="mt-1.5 flex min-h-5 items-end justify-between gap-1.5">
+        <span className="flex min-w-0 flex-wrap items-center gap-1">
           {node.status !== "untested" && node.status !== "planned" && (
             <StatusBadge status={node.status} />
           )}
+          {!isExp && !node.folded && <StagePill stage={stageOf(node)} size="xs" />}
         </span>
-        <button
-          onClick={(e) => {
-            stop(e);
-            openEditor({ mode: "edit", id: node.id });
-          }}
-          title="Edit"
-          className={`nodrag flex size-5 items-center justify-center rounded-full text-white transition ${theme.pencil}`}
-        >
-          <Pencil className="size-2.5" />
-        </button>
+        {!isExp && <AvatarStack uids={node.assignees ?? []} size="size-5" />}
+        {canEdit && (
+          <button
+            onClick={(e) => {
+              stop(e);
+              openEditor({ mode: "edit", id: node.id });
+            }}
+            title="Edit"
+            className={`nodrag flex size-5 items-center justify-center rounded-full text-white transition ${theme.pencil}`}
+          >
+            <Pencil className="size-2.5" />
+          </button>
+        )}
       </div>
+      {!isExp && !node.folded && expProgress.total > 0 && (
+        <span
+          className="absolute inset-x-0 bottom-0 h-[3px] overflow-hidden rounded-b-md bg-slate-100"
+          title={`${expProgress.withResults} of ${expProgress.total} experiments have results`}
+        >
+          <span
+            className="block h-full bg-emerald-500"
+            style={{ width: `${(expProgress.withResults / expProgress.total) * 100}%` }}
+          />
+        </span>
+      )}
       {toggle}
     </div>
   );

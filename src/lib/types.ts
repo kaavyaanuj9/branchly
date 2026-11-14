@@ -57,6 +57,9 @@ export interface ProposedExperiment {
   expectedResult: string;
 }
 
+/** Where the team's work on a sub-hypothesis stands. */
+export type WorkStage = "not_started" | "in_progress" | "done";
+
 /** One box in the hypothesis tree. */
 export interface TreeNode {
   id: string;
@@ -81,6 +84,15 @@ export interface TreeNode {
 
   // AI-suggestion-only field
   proposedExperiment?: ProposedExperiment;
+
+  // Sub-hypothesis teamwork fields
+  /** Team members (uids) working on this sub-hypothesis. */
+  assignees?: string[];
+  /** How far along the work is. Missing means "not_started". */
+  stage?: WorkStage;
+
+  /** Creation sequence, so siblings keep their order when synced from Firestore. */
+  order?: number;
 
   /** Children hidden from view ("Collapse this branch"). */
   collapsed?: boolean;
@@ -110,4 +122,58 @@ export interface ChatMessage {
 export interface Project {
   title: string;
   nodes: TreeNode[];
+}
+
+// ── Research teams ──────────────────────────────────────────────────────────
+
+/** What a team member is allowed to do. */
+export type Role = "owner" | "editor" | "viewer";
+
+export interface MemberProfile {
+  name: string;
+  email: string;
+  photoURL: string | null;
+}
+
+/** A research team (Firestore `teams/{id}`). Every user also has a personal one. */
+export interface Team {
+  id: string;
+  name: string;
+  personal: boolean;
+  roles: Record<string, Role>;
+  memberIds: string[];
+  members: Record<string, MemberProfile>;
+}
+
+/** A hypothesis tree owned by a team (Firestore `teams/{teamId}/trees/{id}`). */
+export interface TreeMeta {
+  id: string;
+  title: string;
+  createdBy: string;
+  updatedAt: number;
+  /** Summary of its sub-hypotheses, kept up to date by editors' clients. */
+  progress?: TreeProgress;
+}
+
+/** Counts across a tree's (non-folded) sub-hypotheses, for the team page. */
+export interface TreeProgress {
+  total: number;
+  notStarted: number;
+  inProgress: number;
+  done: number;
+  unassigned: number;
+  /** Everyone assigned to at least one sub-hypothesis, sorted. */
+  assigneeIds: string[];
+}
+
+/** A pending invitation to join a team (Firestore `invites/{id}`). */
+export interface Invite {
+  id: string;
+  teamId: string;
+  teamName: string;
+  role: Exclude<Role, "owner">;
+  inviteeUid: string;
+  inviteeEmail: string;
+  invitedBy: { uid: string; name: string };
+  createdAt: number;
 }

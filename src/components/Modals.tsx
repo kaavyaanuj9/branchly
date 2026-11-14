@@ -442,8 +442,6 @@ export function UploadResultModal({ experimentId, onClose }: { experimentId: str
 
 // ── Help guide ───────────────────────────────────────────────────────────────
 export function HelpModal({ onClose }: { onClose: () => void }) {
-  const { dispatch } = useStore();
-  const [confirmReset, setConfirmReset] = useState(false);
   const steps = [
     ["Break down", "Your main idea sits at the top. Smaller, testable ideas branch below it."],
     ["Plan experiments", "Each idea gets experiments with a goal, steps and an expected result. The reason for every link is saved."],
@@ -480,19 +478,7 @@ export function HelpModal({ onClose }: { onClose: () => void }) {
           </p>
         </div>
 
-        <div className="flex items-center justify-between border-t border-slate-100 pt-4">
-          <button
-            onClick={() => {
-              if (!confirmReset) return setConfirmReset(true);
-              dispatch({ type: "reset" });
-              onClose();
-            }}
-            className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
-              confirmReset ? "bg-rose-600 text-white hover:bg-rose-700" : "text-slate-500 hover:bg-slate-100"
-            }`}
-          >
-            {confirmReset ? "Click again to erase your changes" : "Reset demo project"}
-          </button>
+        <div className="flex items-center justify-end border-t border-slate-100 pt-4">
           <button onClick={onClose} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">
             Got it
           </button>

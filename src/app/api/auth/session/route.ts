@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { getAdminAuth, SESSION_COOKIE, SESSION_MAX_AGE_SECONDS } from "@/lib/firebase/admin";
+import {
+  ensurePersonalTeam,
+  getAdminAuth,
+  SESSION_COOKIE,
+  SESSION_MAX_AGE_SECONDS,
+} from "@/lib/firebase/admin";
 
 // Swaps the short-lived Firebase ID token from the Google popup
 // for a long-lived, httpOnly session cookie.
@@ -16,6 +21,9 @@ export async function POST(request: Request) {
     if (Date.now() / 1000 - decoded.auth_time > 5 * 60) {
       return NextResponse.json({ error: "Sign-in is too old, please retry" }, { status: 401 });
     }
+
+    // Also retried on every page load by /api/auth/token, so a failure here isn't fatal.
+    await ensurePersonalTeam(decoded).catch((e) => console.error("ensurePersonalTeam failed", e));
 
     const sessionCookie = await auth.createSessionCookie(idToken, {
       expiresIn: SESSION_MAX_AGE_SECONDS * 1000,

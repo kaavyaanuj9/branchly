@@ -52,6 +52,22 @@ How it works: the login page runs Google sign-in with the Firebase web SDK, then
 
 ---
 
+## 🗄️ Set up Firestore (teams and shared trees)
+
+Trees, research teams and invites are stored in Cloud Firestore, so teammates can edit the same tree live. This fits Firebase's free Spark plan.
+
+1. Firebase console → **Firestore Database → Create database**. Pick production mode and the region nearest your users.
+2. Publish the security rules in [`firestore.rules`](firestore.rules). Either paste them into the console's **Firestore → Rules** tab and click **Publish**, or run:
+   ```bash
+   npx firebase-tools login
+   npx firebase-tools deploy --only firestore:rules
+   ```
+   The rules are what stop viewers from editing and non-members from reading a team's trees, so redeploy them whenever `firestore.rules` changes.
+
+No extra env vars are needed: the Firebase Admin credentials above also cover Firestore.
+
+---
+
 ## 🚀 Run it
 
 ```bash
@@ -64,22 +80,28 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## 🔬 Key Features
 
-1. **Semantic Scholar Literature Search**:
+1. **Research teams**:
+   - Every user has a **Personal** space. Create a team from the home page to collaborate.
+   - Owners invite people by the Google email they sign in with. Only people who've signed in to HypoTree at least once can be invited, and they accept or decline under **Team invites** (inbox icon in the header).
+   - Roles: **Owner** manages members and can delete the team, **Editor** edits trees, **Viewer** can read and chat with the AI but not change the tree.
+   - Everyone on a team sees edits to a tree within about a second.
+
+2. **Semantic Scholar Literature Search**:
    - Click **Search Literature** in the toolbar or **Search Semantic Scholar for papers** in any node's Evidence panel.
    - Read abstracts, TLDRs, citation counts, and click direct paper links.
    - Click **Add to Evidence** to link the publication directly to your hypothesis.
    - Click **Analyze with Claude** to assess whether the paper supports or challenges the claim.
 
-2. **Claude Sonnet 5.5 AI Co-Investigators**:
+3. **Claude Sonnet 5.5 AI Co-Investigators**:
    - Each node has a dedicated agent (Literature Agent, Validator Agent, Experiment Agent, Explorer Agent).
    - Chat in real-time about protocols, controls, and boundary conditions.
    - Claude generates structured proposal cards (**Approve & add to tree**) that insert sub-hypotheses or experiments directly into the canvas.
 
-3. **Break Down with Claude**:
+4. **Break Down with Claude**:
    - Select any hypothesis and click **Break Down (Claude)** in the toolbar or detail panel.
    - Claude formulates 3 testable sub-claims and experiments through different scientific lenses (*"What must be true"*, *"When might it not hold"*, *"Direct mechanism"*).
 
-4. **Experiment Result Interpretation**:
+5. **Experiment Result Interpretation**:
    - Upload experimental findings and designate the outcome (*As expected*, *Unexpected / Contradicted*, *Unclear*).
    - Claude interprets the results against prior expectations.
    - If contradicted, Claude formulates 3 distinct, creative alternative hypotheses with follow-up experiments to explain the unexpected finding.
@@ -103,11 +125,15 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 | `src/components/TreeCanvas.tsx` | Interactive React Flow canvas with confidence-weighted edges. |
 | `src/components/DetailPanel.tsx` | Selected node inspection, protocols, results, and evidence curation. |
 | `src/components/ChatPanel.tsx` | Per-node conversational co-investigator with Claude Sonnet 5.5. |
+| `src/lib/store.tsx` | One tree's state. Applies actions locally, writes changed nodes and messages to Firestore, and listens for teammates' edits. |
+| `src/lib/teams.ts` | Live Firestore hooks for teams, trees and invites, plus tree create/rename and the one-time import of a browser-saved tree. |
+| `src/app/api/teams/`, `src/app/api/invitations/` | Server routes for membership: create/rename/delete teams, invite, accept/decline, change roles, remove members, delete trees. |
+| `src/components/teams/` | Teams home, team page (trees + members + invites) and the invite inbox. |
+| `firestore.rules` | Who can read and write what in Firestore. |
 | `src/proxy.ts` | Gates every page and API route on a valid Firebase session cookie. |
 | `src/lib/firebase/admin.ts` | Server-only Firebase Admin setup and session-cookie verification. |
 | `src/lib/firebase/client.ts` | Browser Firebase setup used for the Google sign-in popup. |
 | `src/app/login/` | Login page with the "Sign in with Google" button. |
 | `src/app/api/auth/session/route.ts` | Exchanges a fresh Google sign-in for the session cookie. |
 | `src/app/auth/signout/route.ts` | Clears the session cookie. |
-| `src/lib/store.tsx` | Unified React store and `localStorage` persistence. |
 | `src/lib/types.ts` | TypeScript types for tree nodes, evidence, papers, and proposals. |

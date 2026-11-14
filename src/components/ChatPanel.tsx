@@ -12,7 +12,7 @@ import { useUI } from "./uiContext";
 // Each box keeps its own chat history.
 
 export function ChatPanel({ node }: { node: TreeNode }) {
-  const { state, dispatch } = useStore();
+  const { state, dispatch, canEdit } = useStore();
   const { setChatOpen } = useUI();
   const [draft, setDraft] = useState("");
   const [typingFor, setTypingFor] = useState<string | null>(null);
@@ -162,7 +162,7 @@ export function ChatPanel({ node }: { node: TreeNode }) {
               {m.proposal && (
                 <ProposalCard
                   message={m}
-                  onAccept={() => acceptProposal(m)}
+                  onAccept={canEdit ? () => acceptProposal(m) : undefined}
                 />
               )}
             </AgentBubble>
@@ -223,7 +223,7 @@ function AgentBubble({ children }: { children: React.ReactNode }) {
   );
 }
 
-function ProposalCard({ message, onAccept }: { message: ChatMessage; onAccept: () => void }) {
+function ProposalCard({ message, onAccept }: { message: ChatMessage; onAccept?: () => void }) {
   const p = message.proposal!;
   const isExp = p.kind === "experiment";
   return (
@@ -248,6 +248,8 @@ function ProposalCard({ message, onAccept }: { message: ChatMessage; onAccept: (
         <p className="mt-2 flex items-center gap-1 text-[12px] font-semibold text-emerald-600">
           <Check className="size-3.5" /> Added to the tree
         </p>
+      ) : !onAccept ? (
+        <p className="mt-2 text-[12px] text-slate-500">An editor can add this to the tree.</p>
       ) : (
         <button
           onClick={onAccept}

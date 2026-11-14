@@ -1,24 +1,31 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { ReactFlowProvider } from "@xyflow/react";
 import {
   BookOpen,
   CircleHelp,
+  Eye,
   FlaskConical,
-  LogOut,
+  ListChecks,
+  Loader2,
   MessageSquare,
   MessageSquareOff,
   MousePointerClick,
-  Network,
   Plus,
   Sparkles,
   Upload,
 } from "lucide-react";
 import { StoreProvider, useStore } from "@/lib/store";
+import { useCurrentUser } from "@/lib/firebase/FirebaseProvider";
+import type { Team } from "@/lib/types";
+import { AppHeader } from "./AppHeader";
+import { TeamContext } from "./teamContext";
 import { findNode } from "@/lib/tree";
 import { TreeCanvas } from "./TreeCanvas";
 import { DetailPanel } from "./DetailPanel";
+import { ProgressPanel } from "./ProgressPanel";
 import { ChatPanel } from "./ChatPanel";
 import { HelpModal, NodeEditorModal, UploadResultModal } from "./Modals";
 import { PaperSearchModal } from "./PaperSearchModal";
@@ -27,30 +34,39 @@ import { UIContext, type EditorRequest, type UIContextValue } from "./uiContext"
 
 // The whole HypoTree screen: header, toolbar, tree, detail panel and chat.
 
-export type SignedInUser = {
-  email: string;
-  name: string;
-  avatarUrl: string | null;
-};
-
-export function HypoTreeApp({ user }: { user: SignedInUser | null }) {
+/** One team's tree, live from Firestore. Viewers get a read-only workspace. */
+export function HypoTreeApp({ team, treeId }: { team: Team; treeId: string }) {
+  const { uid } = useCurrentUser();
+  const role = team.roles[uid];
   return (
-    <StoreProvider>
+    <StoreProvider
+      key={`${team.id}/${treeId}`}
+      teamId={team.id}
+      treeId={treeId}
+      canEdit={role === "owner" || role === "editor"}
+    >
       <ReactFlowProvider>
-        <Workspace user={user} />
+        <TeamContext.Provider value={{ team, uid }}>
+          <Workspace team={team} />
+        </TeamContext.Provider>
       </ReactFlowProvider>
     </StoreProvider>
   );
 }
 
-function Workspace({ user }: { user: SignedInUser | null }) {
-  const { state, dispatch } = useStore();
+function Workspace({ team }: { team: Team }) {
+  const { state, dispatch, canEdit } = useStore();
   const [chatOpen, setChatOpen] = useState(true);
   const [editor, setEditor] = useState<EditorRequest | null>(null);
   const [uploadFor, setUploadFor] = useState<string | null>(null);
   const [paperSearchFor, setPaperSearchFor] = useState<string | null>(null);
   const [decomposeFor, setDecomposeFor] = useState<string | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
+  // The Progress panel stays open until you select a different box.
+  const [progressAnchor, setProgressAnchor] = useState<string | null | undefined>(undefined);
+  const progressOpen = progressAnchor !== undefined && progressAnchor === state.selectedId;
+  const setProgressOpen = (open: boolean) =>
+    setProgressAnchor(open ? state.selectedId : undefined);
 
   const selected = findNode(state.nodes, state.selectedId);
 
@@ -102,70 +118,60 @@ function Workspace({ user }: { user: SignedInUser | null }) {
     { ideas: 0, experiments: 0, supported: 0, contradicted: 0, suggestions: 0 },
   );
 
+  if (state.missing) {
+    return (
+      <div className="flex h-dvh flex-col">
+        <AppHeader crumbs={[{ label: team.name, href: `/teams/${team.id}` }]} />
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-slate-500">
+          This tree was deleted, or you no longer have access to it.
+          <Link href={`/teams/${team.id}`} className="font-medium text-indigo-700 hover:underline">
+            Back to {team.name}
+          </Link>
+        </div>
+      </div>
+    );
+  }
+  if (!state.hydrated) {
+    return (
+      <div className="flex h-dvh items-center justify-center text-slate-400">
+        <Loader2 className="size-5 animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <UIContext.Provider value={ui}>
       <div className="flex h-dvh flex-col bg-white text-slate-900">
-        {/* Header */}
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200 px-5">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="flex items-center gap-2 font-semibold tracking-tight text-indigo-800">
-              <span className="flex size-7 items-center justify-center rounded-lg bg-indigo-700 text-white">
-                <Network className="size-4" />
-              </span>
-              HypoTree
+        <AppHeader
+          crumbs={[
+            { label: team.personal ? "Personal" : team.name, href: `/teams/${team.id}` },
+            { label: state.title || "…" },
+          ]}
+        >
+          {!canEdit && (
+            <span className="flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+              <Eye className="size-3.5" /> View only
             </span>
-            <span className="h-5 w-px bg-slate-200" />
-            <h1 className="truncate text-[15px] font-semibold text-slate-900">{state.title}</h1>
-          </div>
-          <div className="flex items-center gap-4 text-sm text-slate-500">
-            <span className="hidden sm:inline">Tree View</span>
-            <button
-              onClick={() => setHelpOpen(true)}
-              className="rounded-full p-1 transition hover:bg-slate-100 hover:text-slate-900"
-              title="How HypoTree works"
-            >
-              <CircleHelp className="size-5" />
-            </button>
-            {user && (
-              <div className="flex items-center gap-2 border-l border-slate-200 pl-4">
-                {user.avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={user.avatarUrl}
-                    alt=""
-                    referrerPolicy="no-referrer"
-                    className="size-7 rounded-full"
-                  />
-                ) : (
-                  <span className="flex size-7 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-800">
-                    {user.name.charAt(0).toUpperCase()}
-                  </span>
-                )}
-                <span className="hidden max-w-40 truncate text-slate-700 md:inline" title={user.email}>
-                  {user.name}
-                </span>
-                <form action="/auth/signout" method="post">
-                  <button
-                    type="submit"
-                    className="rounded-full p-1 transition hover:bg-slate-100 hover:text-slate-900"
-                    title="Sign out"
-                  >
-                    <LogOut className="size-4" />
-                  </button>
-                </form>
-              </div>
-            )}
-          </div>
-        </header>
+          )}
+          <button
+            onClick={() => setHelpOpen(true)}
+            className="rounded-full p-1 transition hover:bg-slate-100 hover:text-slate-900"
+            title="How HypoTree works"
+          >
+            <CircleHelp className="size-5" />
+          </button>
+        </AppHeader>
 
         {/* Toolbar */}
         <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-200 px-5 py-2.5">
-          <button
-            onClick={() => setEditor({ mode: "add", parentId: addParentId, kind: "hypothesis" })}
-            className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-[13px] font-medium text-white shadow-sm transition hover:bg-slate-800"
-          >
-            <Plus className="size-3.5" /> Add Sub-Hypothesis
-          </button>
+          {canEdit && (
+            <button
+              onClick={() => setEditor({ mode: "add", parentId: addParentId, kind: "hypothesis" })}
+              className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-[13px] font-medium text-white shadow-sm transition hover:bg-slate-800"
+            >
+              <Plus className="size-3.5" /> Add Sub-Hypothesis
+            </button>
+          )}
           <button
             onClick={() => setChatOpen(!chatOpen)}
             className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-[13px] font-medium text-white shadow-sm transition hover:bg-slate-800"
@@ -174,12 +180,24 @@ function Workspace({ user }: { user: SignedInUser | null }) {
             {chatOpen ? "Hide Chat" : "Show Chat"}
           </button>
           <button
-            onClick={() => setPaperSearchFor(selected?.id || "root")}
-            className="flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50/70 px-3 py-1.5 text-[13px] font-medium text-indigo-700 shadow-sm transition hover:bg-indigo-100"
+            onClick={() => setProgressOpen(!progressOpen)}
+            className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[13px] font-medium shadow-sm transition ${
+              progressOpen
+                ? "border-emerald-300 bg-emerald-100 text-emerald-800"
+                : "border-emerald-200 bg-emerald-50/70 text-emerald-700 hover:bg-emerald-100"
+            }`}
           >
-            <BookOpen className="size-3.5" /> Search Literature
+            <ListChecks className="size-3.5" /> Progress
           </button>
-          {selected && selected.kind !== "experiment" && !selected.folded && (
+          {canEdit && (
+            <button
+              onClick={() => setPaperSearchFor(selected?.id || "root")}
+              className="flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50/70 px-3 py-1.5 text-[13px] font-medium text-indigo-700 shadow-sm transition hover:bg-indigo-100"
+            >
+              <BookOpen className="size-3.5" /> Search Literature
+            </button>
+          )}
+          {canEdit && selected && selected.kind !== "experiment" && !selected.folded && (
             <button
               onClick={() => setDecomposeFor(selected.id)}
               className="flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50/70 px-3 py-1.5 text-[13px] font-medium text-purple-700 shadow-sm transition hover:bg-purple-100"
@@ -187,7 +205,7 @@ function Workspace({ user }: { user: SignedInUser | null }) {
               <Sparkles className="size-3.5" /> Break Down (Claude)
             </button>
           )}
-          {selected?.kind === "experiment" && (
+          {canEdit && selected?.kind === "experiment" && (
             <button
               onClick={() => setUploadFor(selected.id)}
               className="flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-[13px] font-medium text-rose-700 transition hover:bg-rose-100"
@@ -219,8 +237,14 @@ function Workspace({ user }: { user: SignedInUser | null }) {
               </div>
             )}
           </div>
-          {selected && <DetailPanel key={`d-${selected.id}`} node={selected} />}
-          {selected && chatOpen && <ChatPanel key={`c-${selected.id}`} node={selected} />}
+          {progressOpen ? (
+            <ProgressPanel onClose={() => setProgressOpen(false)} />
+          ) : (
+            <>
+              {selected && <DetailPanel key={`d-${selected.id}`} node={selected} />}
+              {selected && chatOpen && <ChatPanel key={`c-${selected.id}`} node={selected} />}
+            </>
+          )}
         </main>
       </div>
 
