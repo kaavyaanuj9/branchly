@@ -576,3 +576,57 @@ Keep rationale, goals, and steps concise and high-signal (1-2 sentences each) so
   }
   return nodes;
 }
+
+/**
+ * A box looks crowded on the field map: read the papers that most directly address it and say
+ * how much of the claim they actually answer, where the gap is, and sharper versions aimed at it.
+ */
+export interface CrowdingCheck {
+  verdict: "answered" | "partly" | "open";
+  summary: string;
+  gap: string;
+  options: { title: string; why: string }[];
+}
+
+export async function assessCrowdingWithClaude({
+  title,
+  context,
+  papers,
+}: {
+  title: string;
+  context?: string;
+  papers: { title: string; abstract?: string; citation: string }[];
+}): Promise<CrowdingCheck> {
+  const system = `You help a biomedical research team decide whether a hypothesis is already answered by published work.
+You get the hypothesis and the papers that most directly address it. Judge honestly:
+- "answered": the papers already test this claim in substantially this form.
+- "partly": they cover the broader question or a neighbouring mechanism, but not this specific claim.
+- "open": they are related but do not test it.
+"summary": 1-2 sentences on what the papers do establish, naming papers by their citation in parentheses.
+"gap": one sentence on what remains untested (empty if fully answered).
+"options": 2-3 sharper, testable rewordings of the hypothesis aimed at the gap (each <= 30 words), with "why" (one sentence on why it is less covered).
+Return ONLY JSON: {"verdict": "...", "summary": "...", "gap": "...", "options": [{"title": "...", "why": "..."}]}`;
+  const list = papers
+    .slice(0, 5)
+    .map((p, i) => `[${i + 1}] ${p.citation}: ${p.title}\n    ${(p.abstract || "").slice(0, 500)}`)
+    .join("\n");
+  const raw = await complete({
+    system,
+    messages: [
+      {
+        role: "user",
+        content: `Hypothesis: "${title}"${context ? `\n(It sits under: "${context}")` : ""}\n\nPapers that most directly address it:\n${list}`,
+      },
+    ],
+    maxTokens: 1200,
+  });
+  const json = raw.match(/\{[\s\S]*\}/);
+  if (!json) throw new Error("Couldn't read the literature check. Please try again.");
+  const r = JSON.parse(json[0]) as Partial<CrowdingCheck>;
+  return {
+    verdict: r.verdict === "answered" || r.verdict === "open" ? r.verdict : "partly",
+    summary: r.summary || "",
+    gap: r.gap || "",
+    options: (r.options || []).filter((o) => o && o.title).slice(0, 3),
+  };
+}

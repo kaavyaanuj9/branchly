@@ -77,12 +77,15 @@ type FieldFlowNode = Node<
     hasKids: boolean;
     pulse: boolean;
     onToggle: (id: string) => void;
+    /** open one of your team's boxes in the tree */
+    onOpenBox: (id: string) => void;
   },
   "field"
 >;
 
 function FieldNode({ data, selected }: NodeProps<FieldFlowNode>) {
-  const { item, team, open, hasKids, pulse, onToggle } = data;
+  const { item, team, open, hasKids, pulse, onToggle, onOpenBox } = data;
+  const [showTeam, setShowTeam] = useState(false);
   const sig = item.signals;
   const hot = item.depth > 1 && item.momentum >= 1.5;
   const isRoot = item.depth === 0;
@@ -138,12 +141,41 @@ function FieldNode({ data, selected }: NodeProps<FieldFlowNode>) {
         )}
       </p>
       {team.length > 0 && (
-        <span
-          title={team.map((t) => `• ${t.title}`).join("\n")}
-          className="absolute -right-2 -top-2 flex items-center gap-0.5 rounded-full bg-neutral-900 px-1.5 py-0.5 text-[10px] font-semibold text-white shadow-sm"
+        <button
+          // no stopPropagation: the click also selects this card, which lifts it (and the list) above its neighbours
+          onClick={() => setShowTeam(!showTeam)}
+          title="Your team's boxes in this topic: click to see them"
+          className="nodrag absolute -right-2 -top-2 z-10 flex items-center gap-0.5 rounded-full bg-neutral-900 px-1.5 py-0.5 text-[10px] font-semibold text-white shadow-sm hover:bg-neutral-700"
         >
           <Users className="size-2.5" /> {team.length}
-        </span>
+        </button>
+      )}
+      {showTeam && team.length > 0 && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="nodrag nowheel absolute left-full top-0 z-20 ml-3 w-[280px] space-y-1 rounded-xl border border-neutral-200 bg-white p-2 shadow-lg"
+        >
+          <p className="flex items-center justify-between px-1.5 pb-1 text-[11px] font-medium text-neutral-500">
+            Your team&apos;s boxes here · {team.length}
+            <button onClick={() => setShowTeam(false)} className="text-neutral-400 hover:text-neutral-900" title="Close">
+              <X className="size-3" />
+            </button>
+          </p>
+          {team.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => onOpenBox(t.id)}
+              title="Open this box in the tree"
+              className="flex w-full items-start gap-2 rounded-lg px-1.5 py-1.5 text-left text-[12px] leading-snug text-neutral-800 hover:bg-neutral-100"
+            >
+              <span className="mt-0.5 shrink-0 rounded border border-neutral-300 px-1 text-[9.5px] text-neutral-500">
+                {t.kind === "root" ? "Main" : "Hyp."}
+              </span>
+              <span className="line-clamp-3">{t.title}</span>
+            </button>
+          ))}
+          <p className="px-1.5 pt-0.5 text-[10.5px] text-neutral-400">Click one to open it in the tree.</p>
+        </div>
       )}
       {hasKids && (
         <button
@@ -316,6 +348,15 @@ function FieldMap() {
     [parentOf],
   );
 
+  // from a team badge on the map straight to that box in the tree
+  const openBox = useCallback(
+    (id: string) => {
+      dispatch({ type: "select", id });
+      setView("project");
+    },
+    [dispatch, setView],
+  );
+
   const toggle = useCallback(
     (id: string) =>
       setOpen((prev) => {
@@ -360,6 +401,7 @@ function FieldMap() {
           hasKids: !!item.children?.length,
           pulse: pulse.has(item.id),
           onToggle: toggle,
+          onOpenBox: openBox,
         },
       });
       for (const k of kids)
@@ -376,7 +418,7 @@ function FieldMap() {
     };
     place(root, 0);
     return { nodes, edges };
-  }, [root, open, selected, teamAt, colorOf, toggle, pulse, parentOf]);
+  }, [root, open, selected, teamAt, colorOf, toggle, pulse, parentOf, openBox]);
 
   const nav: FieldNav = useMemo(
     () => ({
@@ -610,11 +652,13 @@ function FieldMap() {
         {canvas === "topics" && (
         <div className="pointer-events-none absolute bottom-5 left-[4.5rem] z-10 flex flex-wrap items-center gap-3 rounded-lg border border-neutral-200 bg-white/90 px-3 py-2 text-[11.5px] text-neutral-600 shadow-sm">
           <span className="flex items-center gap-1">
-            <span className="flex size-4 items-center justify-center rounded-full bg-neutral-900 text-[9px] font-bold text-white">2</span>
-            your project&apos;s ideas here
+            <span className="flex items-center gap-0.5 rounded-full bg-neutral-900 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+              <Users className="size-2.5" /> 2
+            </span>
+            your team&apos;s ideas in this topic
           </span>
           <span className="flex items-center gap-1 text-neutral-900">
-            <Flame className="size-3" /> growing faster than the field
+            <Flame className="size-3" /> growing faster than the field (×)
           </span>
           {homeless.length > 0 && (
             <button
@@ -625,7 +669,7 @@ function FieldMap() {
             </button>
           )}
           <span className="flex items-center gap-1 text-neutral-900">
-            <Hand className="size-3" /> someone is working on it
+            <Hand className="size-3" /> a lab says it&apos;s working here
           </span>
         </div>
         )}

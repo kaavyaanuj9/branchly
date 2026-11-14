@@ -25,7 +25,7 @@ import { childrenOf, findNode } from "@/lib/tree";
 import type { TreeNode } from "@/lib/types";
 import { AssignmentSection } from "./Assignment";
 import { ChatDock } from "./ChatPanel";
-import { FieldPanel, ReportToField } from "./FieldPanel";
+import { CrowdingSection, FieldPanel, ReportToField } from "./FieldPanel";
 import { useUI } from "./uiContext";
 
 // The side panel for the selected box: what it claims, how sure we are, why it is linked to
@@ -212,6 +212,11 @@ export function DetailPanel({ node }: { node: TreeNode }) {
             <p className="text-[14px] leading-relaxed text-neutral-700">{node.rationale}</p>
             {node.lens && <span className="inline-block rounded-md bg-neutral-100 px-2 py-0.5 text-[12px] text-neutral-600">{node.lens}</span>}
           </Section>
+        )}
+
+        {/* the field map says this is crowded or related: show why, and what to do about it */}
+        {(node.fieldNovelty === "crowded" || node.fieldNovelty === "related") && (
+          <CrowdingSection key={node.title} node={node} parent={parent} />
         )}
 
         {/* who on the team is working on this, and how far along it is */}

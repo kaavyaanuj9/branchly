@@ -13,7 +13,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { fieldQuery } from "@/lib/fieldQuery";
-import { useStore } from "@/lib/store";
+import { newId, useStore } from "@/lib/store";
 import { unseenHits } from "./FieldSync";
 import type { Evidence, TreeNode } from "@/lib/types";
 import { useFieldNav } from "./fieldNav";
@@ -606,5 +606,198 @@ function WatchField({ node }: { node: TreeNode }) {
         />
       ))}
     </div>
+  );
+}
+
+// ── crowded? say why, and what to do about it ────────────────────────────────
+
+interface CrowdingCheck {
+  verdict: "answered" | "partly" | "open";
+  summary: string;
+  gap: string;
+  options: { title: string; why: string }[];
+}
+
+const VERDICT = {
+  answered: { label: "Already answered", cls: "bg-neutral-900 text-white" },
+  partly: { label: "Partly answered", cls: "bg-amber-100 text-amber-900" },
+  open: { label: "Still open", cls: "bg-neutral-100 text-neutral-800" },
+} as const;
+
+/**
+ * Shown on boxes the field map marks crowded or related: the papers that most directly address
+ * the box, a check of how much they actually answer, and (for editors) fold it or sharpen it.
+ */
+export function CrowdingSection({ node, parent }: { node: TreeNode; parent?: TreeNode }) {
+  const { dispatch, canEdit } = useStore();
+  const query = fieldQuery(node, parent);
+  const load = useCallback(
+    () => getJSON<{ addressing?: FieldPaper[]; directly_relevant?: number | null }>(`/api/field/locate?q=${encodeURIComponent(query)}`),
+    [query],
+  );
+  const { data, error, loading } = useLoad(load);
+  const papers = (data?.addressing ?? []).slice(0, 3);
+  const [check, setCheck] = useState<CrowdingCheck | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [checkError, setCheckError] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  const crowded = node.fieldNovelty === "crowded";
+
+  const runCheck = async () => {
+    setChecking(true);
+    setCheckError(null);
+    try {
+      setCheck(
+        await getJSON<CrowdingCheck>("/api/crowding", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: node.title,
+            context: parent?.title,
+            papers: papers.map((p) => ({ title: p.title, abstract: p.abstract, citation: citationOf(p) })),
+          }),
+        }),
+      );
+    } catch (e) {
+      setCheckError(message(e));
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const keepPapers = () => {
+    for (const p of papers.slice(0, 2))
+      if (!node.evidence.some((e) => e.paperId === p.id || e.url === p.url))
+        dispatch({ type: "addEvidence", id: node.id, evidence: toEvidence(p) });
+  };
+  const fold = () => {
+    keepPapers();
+    dispatch({
+      type: "setFolded",
+      id: node.id,
+      folded: true,
+      reason: `Already answered in the literature: ${papers.slice(0, 2).map(citationOf).join("; ")}.${check?.summary ? ` ${check.summary}` : ""}`,
+    });
+  };
+  const reword = (o: { title: string; why: string }) => {
+    keepPapers();
+    dispatch({
+      type: "updateNode",
+      id: node.id,
+      patch: {
+        title: o.title,
+        rationale: [node.rationale, `Sharpened after a literature check: “${node.title}” was largely covered (${papers.slice(0, 2).map(citationOf).join("; ")}). ${o.why}`]
+          .filter(Boolean)
+          .join("\n\n"),
+        fieldNovelty: undefined, // re-checked against the field map with the new wording
+      },
+    });
+    setDone("Reworded. The field map is re-checking it now.");
+    setCheck(null);
+  };
+  const addAlongside = (o: { title: string; why: string }) => {
+    const id = newId();
+    dispatch({
+      type: "addNode",
+      select: false,
+      node: {
+        id,
+        parentId: node.parentId ?? "root",
+        kind: "hypothesis",
+        status: "untested",
+        title: o.title,
+        lens: "Less covered",
+        rationale: `${o.why} Suggested as a less covered alternative to “${node.title}”.`,
+        confidence: node.confidence ?? 0.7,
+        evidence: [],
+      },
+    });
+    setDone("Added next to this box.");
+  };
+
+  if (node.kind === "suggestion" || node.kind === "experiment" || node.folded) return null;
+  if (!error && !loading && papers.length === 0) return null;
+
+  return (
+    <section className="space-y-3 rounded-xl border border-neutral-300 p-4">
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="text-[14px] font-semibold text-neutral-900">Already in the literature?</h3>
+        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${crowded ? "bg-amber-50 text-amber-900" : "bg-sky-50 text-sky-900"}`}>
+          {crowded ? "crowded" : "related"} · {node.fieldRelevant ?? data?.directly_relevant ?? "?"} of 20
+        </span>
+      </div>
+      <p className="text-[12.5px] leading-relaxed text-neutral-500">
+        {node.fieldRelevant ?? data?.directly_relevant ?? "Several"} of the 20 closest papers on the field map directly address this box.
+        These address it most directly:
+      </p>
+      <Status loading={loading} error={error} />
+      {papers.map((p) => (
+        <PaperRow key={p.id} paper={p} node={canEdit ? node : undefined} />
+      ))}
+
+      {papers.length > 0 && !check && (
+        <button
+          onClick={runCheck}
+          disabled={checking}
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-neutral-900 py-2 text-[13px] font-semibold text-white transition hover:bg-neutral-700 disabled:opacity-60"
+        >
+          {checking ? <Loader2 className="size-3.5 animate-spin" /> : <BookOpen className="size-3.5" />}
+          {checking ? "Reading these papers…" : "Check what's already answered"}
+        </button>
+      )}
+      {checkError && <p className="rounded-md bg-rose-50 p-2 text-[12px] text-rose-700">{checkError}</p>}
+      {done && <p className="flex items-center gap-1.5 text-[12.5px] text-neutral-700"><Check className="size-3.5" /> {done}</p>}
+
+      {check && (
+        <div className="space-y-3">
+          <div className="space-y-1.5 rounded-lg bg-neutral-100 p-3 text-[13px] leading-relaxed text-neutral-800">
+            <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold ${VERDICT[check.verdict].cls}`}>
+              {VERDICT[check.verdict].label}
+            </span>
+            <p>{check.summary}</p>
+            {check.gap && (
+              <p className="text-neutral-600">
+                <b className="font-medium text-neutral-900">Gap: </b>
+                {check.gap}
+              </p>
+            )}
+          </div>
+          {canEdit && check.verdict === "answered" && (
+            <button
+              onClick={fold}
+              className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-neutral-900 py-2 text-[13px] font-semibold text-neutral-900 hover:bg-neutral-100"
+            >
+              Fold it: already answered
+            </button>
+          )}
+          {check.options.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[13px] font-medium text-neutral-500">Sharper versions, aimed at the gap</p>
+              {check.options.map((o, i) => (
+                <div key={i} className="space-y-2 rounded-lg border border-neutral-200 p-3">
+                  <p className="text-[13px] font-medium leading-snug text-neutral-900">{o.title}</p>
+                  <p className="text-[12px] leading-relaxed text-neutral-500">{o.why}</p>
+                  {canEdit && (
+                    <div className="flex gap-1.5">
+                      <button onClick={() => reword(o)} className="rounded-md bg-neutral-900 px-2.5 py-1 text-[12px] font-semibold text-white hover:bg-neutral-700">
+                        Use this wording
+                      </button>
+                      <button onClick={() => addAlongside(o)} className="rounded-md border border-neutral-300 px-2.5 py-1 text-[12px] font-medium text-neutral-800 hover:border-neutral-900">
+                        Add alongside
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {canEdit && check.verdict !== "answered" && (
+            <button onClick={fold} className="text-[12px] text-neutral-500 underline decoration-dotted hover:text-neutral-900">
+              Fold it anyway as already answered
+            </button>
+          )}
+        </div>
+      )}
+    </section>
   );
 }
