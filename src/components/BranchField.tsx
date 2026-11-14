@@ -58,7 +58,14 @@ function growTree(w: number, h: number, hole: { rx: number; ry: number }, seed =
   return segs;
 }
 
-export function BranchField({ hole = { rx: 230, ry: 260 }, dim = false }: { hole?: { rx: number; ry: number }; dim?: boolean }) {
+export function BranchField({
+  hole = { rx: 230, ry: 260 },
+  fade = 1,
+}: {
+  hole?: { rx: number; ry: number };
+  /** 1 = full ink; lower values make the branches quieter (behind busier pages) */
+  fade?: number;
+}) {
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   useEffect(() => {
@@ -74,7 +81,7 @@ export function BranchField({ hole = { rx: 230, ry: 260 }, dim = false }: { hole
   }, [size, hole.rx, hole.ry]);
 
   return (
-    <div ref={box} className={`pointer-events-none absolute inset-0 overflow-hidden ${dim ? "opacity-35" : ""}`} aria-hidden>
+    <div ref={box} className="pointer-events-none absolute inset-0 overflow-hidden" style={{ opacity: fade }} aria-hidden>
       {/* soft gray shade, heavier towards the corners */}
       <div
         className="absolute inset-0"

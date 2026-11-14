@@ -86,6 +86,8 @@ export function IdeaStudio({
   const [candError, setCandError] = useState<string | null>(null);
   const [step, setStep] = useState(0);
   const latest = [...msgs].reverse().find((m) => m.f)?.f ?? null;
+  const lastUserText = [...msgs].reverse().find((m) => m.role === "user")?.content ?? "";
+  const versions = msgs.filter((m) => m.f).length;
   const first = user.name.split(" ")[0];
   const scroller = useRef<HTMLDivElement>(null);
 
@@ -235,7 +237,7 @@ export function IdeaStudio({
       <AnimatePresence>
         {phase === "chat" && (
           <motion.div key="branches" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.8 }}>
-            <BranchField hole={{ rx: 420, ry: 400 }} dim />
+            <BranchField hole={{ rx: 340, ry: 230 }} fade={0.9} />
           </motion.div>
         )}
       </AnimatePresence>
@@ -243,60 +245,45 @@ export function IdeaStudio({
         {phase === "chat" && (
           <motion.section
             key="chat"
-            exit={{ opacity: 0, x: -60, filter: "blur(6px)" }}
+            exit={{ opacity: 0, scale: 0.98, filter: "blur(6px)" }}
             transition={{ duration: 0.6, ease: EASE }}
-            className="relative mx-auto flex h-full max-w-[760px] flex-col px-5"
+            ref={scroller}
+            className="relative flex h-full flex-col items-center overflow-y-auto px-5"
           >
-            <div ref={scroller} className="flex-1 space-y-4 overflow-y-auto pb-6 pt-16">
-              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: EASE }}>
-                <p className="text-[13px] font-medium text-neutral-500">Hi {first}</p>
-                <h1 className="mt-1 text-[34px] font-semibold leading-tight tracking-tight text-neutral-950">
-                  What are you wondering about?
-                </h1>
-                <p className="mt-2 max-w-[560px] text-[14.5px] leading-relaxed text-neutral-500">
-                  Say it however it comes to you. Claude will shape it into a testable hypothesis, then we&apos;ll see
-                  where it sits among everything the field has published.
-                </p>
-              </motion.div>
-              {msgs.length === 0 && (
+            {/* one centred column: the question, then your idea as a card you keep refining */}
+            <div className="relative my-auto w-full max-w-[600px] space-y-5 py-16">
+              <span className="pointer-events-none absolute -inset-x-24 -inset-y-6 -z-10 rounded-[50%] bg-[#f7f7f6]/90 blur-3xl" />
+              {!latest && (
                 <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.4 }}
-                  className="flex flex-wrap gap-2 pt-2"
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.7, ease: EASE }}
+                  className="text-center"
                 >
-                  {EXAMPLES.map((e) => (
-                    <button
-                      key={e}
-                      onClick={() => send(e)}
-                      className="rounded-full border border-black/10 bg-white/70 px-3 py-1.5 text-left text-[12.5px] text-neutral-700 backdrop-blur transition hover:border-neutral-900 hover:text-neutral-950"
-                    >
-                      {e}
-                    </button>
-                  ))}
+                  <p className="text-[13px] text-neutral-500">Hi {first}</p>
+                  <h1 className="mt-1.5 text-[clamp(26px,3vw,36px)] font-semibold leading-tight tracking-[-0.02em] text-neutral-950">
+                    What are you wondering about?
+                  </h1>
+                  <p className="mx-auto mt-2 max-w-[460px] text-[14px] leading-relaxed text-neutral-500">
+                    Put it in your own words. It becomes a testable hypothesis, placed among everything the field has published.
+                  </p>
                 </motion.div>
               )}
-              {msgs.map((m) =>
-                m.role === "user" ? (
-                  <motion.div
-                    key={m.id}
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="ml-auto w-fit max-w-[80%] rounded-2xl rounded-br-md bg-neutral-900 px-4 py-2.5 text-[14px] leading-relaxed text-white"
-                  >
-                    {m.content}
-                  </motion.div>
-                ) : (
-                  <motion.div key={m.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-2.5">
-                    <p className="flex items-start gap-2 text-[14px] leading-relaxed text-neutral-700">
-                      <Sparkles className="mt-1 size-3.5 shrink-0 text-neutral-400" /> {m.content}
+
+              {latest && (
+                <motion.div layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+                  {lastUserText && <p className="text-center text-[13px] italic text-neutral-500">“{lastUserText}”</p>}
+                  <IdeaCard f={latest} live version={versions} />
+                  {!thinking && (
+                    <p className="flex items-start justify-center gap-1.5 px-2 text-center text-[12.5px] leading-relaxed text-neutral-500">
+                      <Sparkles className="mt-0.5 size-3 shrink-0 text-neutral-400" /> {latest.reply}
                     </p>
-                    {m.f && <IdeaCard f={m.f} live={m.f === latest} />}
-                  </motion.div>
-                ),
+                  )}
+                </motion.div>
               )}
+
               {thinking && (
-                <div className="flex items-center gap-2 text-[13px] text-neutral-500">
+                <div className="flex items-center justify-center gap-2 text-[13px] text-neutral-500">
                   <span className="flex gap-1">
                     {[0, 1, 2].map((i) => (
                       <motion.span
@@ -307,51 +294,79 @@ export function IdeaStudio({
                       />
                     ))}
                   </span>
-                  Claude is sharpening your idea…
+                  {latest ? "Revising the hypothesis…" : "Shaping it into a testable hypothesis…"}
                 </div>
               )}
-              {error && <p className="rounded-lg bg-rose-50 px-3 py-2 text-[13px] text-rose-700">{error}</p>}
+              {error && <p className="rounded-lg bg-rose-50 px-3 py-2 text-center text-[13px] text-rose-700">{error}</p>}
+
               {latest && !thinking && (
-                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-wrap items-center gap-3 pt-1">
+                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex justify-center">
                   <button
                     onClick={place}
-                    className="group flex items-center gap-2 rounded-full bg-neutral-900 px-5 py-2.5 text-[14px] font-semibold text-white shadow-lg shadow-black/10 transition hover:bg-neutral-700"
+                    className="group flex items-center gap-2 rounded-full bg-neutral-900 px-6 py-3 text-[14px] font-semibold text-white shadow-lg shadow-black/10 transition hover:bg-neutral-700"
                   >
                     See where it sits in the field
                     <ArrowRight className="size-4 transition group-hover:translate-x-0.5" />
                   </button>
-                  <span className="text-[12.5px] text-neutral-500">or reply below to refine it</span>
+                </motion.div>
+              )}
+
+              <motion.form
+                layout
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  send(draft);
+                }}
+                className={`flex items-end gap-2 rounded-2xl border bg-white/90 shadow-[0_10px_40px_rgba(0,0,0,0.07)] backdrop-blur transition focus-within:border-neutral-900 ${
+                  latest ? "border-black/10 p-1.5" : "border-black/15 p-2.5"
+                }`}
+              >
+                <textarea
+                  value={draft}
+                  autoFocus
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      send(draft);
+                    }
+                  }}
+                  rows={latest ? 1 : 3}
+                  placeholder={latest ? "Refine it: narrow the system, change the mechanism…" : "e.g. I think AML cells that survive venetoclax switch to…"}
+                  className={`flex-1 resize-none bg-transparent px-2.5 py-2 text-neutral-900 placeholder:text-neutral-400 focus:outline-none ${
+                    latest ? "min-h-9 text-[13.5px]" : "min-h-20 text-[15.5px]"
+                  }`}
+                />
+                <button
+                  disabled={!draft.trim() || thinking}
+                  className={`flex items-center justify-center rounded-xl bg-neutral-900 text-white transition hover:bg-neutral-700 disabled:opacity-25 ${
+                    latest ? "size-9" : "size-11"
+                  }`}
+                  title={latest ? "Refine" : "Shape my idea"}
+                >
+                  {thinking ? <Loader2 className="size-4 animate-spin" /> : <ArrowRight className="size-4" />}
+                </button>
+              </motion.form>
+
+              {!latest && !thinking && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.4 }}
+                  className="flex flex-wrap justify-center gap-2"
+                >
+                  {EXAMPLES.map((e) => (
+                    <button
+                      key={e}
+                      onClick={() => send(e)}
+                      className="rounded-full border border-black/10 bg-white/80 px-3 py-1.5 text-[12.5px] text-neutral-600 backdrop-blur transition hover:border-neutral-900 hover:text-neutral-950"
+                    >
+                      {e}
+                    </button>
+                  ))}
                 </motion.div>
               )}
             </div>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                send(draft);
-              }}
-              className="mb-6 flex items-end gap-2 rounded-2xl border border-black/10 bg-white/80 p-2 shadow-sm backdrop-blur focus-within:border-neutral-900"
-            >
-              <textarea
-                value={draft}
-                autoFocus
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    send(draft);
-                  }
-                }}
-                rows={msgs.length ? 1 : 2}
-                placeholder={msgs.length ? "Refine it: narrow the system, change the mechanism…" : "e.g. I think resistant cells survive by…"}
-                className="max-h-40 min-h-10 flex-1 resize-none bg-transparent px-2 py-2 text-[14.5px] text-neutral-900 placeholder:text-neutral-400 focus:outline-none"
-              />
-              <button
-                disabled={!draft.trim() || thinking}
-                className="flex size-10 items-center justify-center rounded-xl bg-neutral-900 text-white transition hover:bg-neutral-700 disabled:opacity-30"
-              >
-                {thinking ? <Loader2 className="size-4 animate-spin" /> : <ArrowRight className="size-4" />}
-              </button>
-            </form>
           </motion.section>
         )}
 
@@ -450,7 +465,7 @@ export function IdeaStudio({
 
 // ── the idea card (shared between chat, map and tree: it morphs) ─────────────
 
-function IdeaCard({ f, live }: { f: Formulation; live: boolean }) {
+function IdeaCard({ f, live, version }: { f: Formulation; live: boolean; version?: number }) {
   const parts = (
     [
       ["problem", f.problem, "text-neutral-700 bg-neutral-100 border-black/5"],
@@ -464,7 +479,10 @@ function IdeaCard({ f, live }: { f: Formulation; live: boolean }) {
       transition={{ duration: 0.8, ease: EASE }}
       className="rounded-2xl border border-black/10 bg-white/85 p-4 shadow-[0_8px_30px_rgba(0,0,0,0.06)] backdrop-blur"
     >
-      <p className="text-[10.5px] font-bold uppercase tracking-[0.18em] text-neutral-400">Hypothesis</p>
+      <p className="flex justify-between text-[10.5px] font-bold uppercase tracking-[0.18em] text-neutral-400">
+        Hypothesis
+        {version && version > 1 && <span className="font-medium normal-case tracking-normal">version {version}</span>}
+      </p>
       <p className="mt-1.5 text-[17px] font-semibold leading-snug text-neutral-950">{f.hypothesis}</p>
       {parts.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
