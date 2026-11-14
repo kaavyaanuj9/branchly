@@ -1,21 +1,22 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bot, Check, FlaskConical, GitBranch, SendHorizontal, X } from "lucide-react";
+import { Check, ChevronUp, FlaskConical, GitBranch, Send } from "lucide-react";
 import { newId, useStore } from "@/lib/store";
 import { childrenOf, findNode, shorten } from "@/lib/tree";
 import type { ChatMessage, TreeNode } from "@/lib/types";
-import { QUICK_PROMPTS, agentIntro, agentLabel, getAgentReply } from "@/lib/mockAgent";
-import { useUI } from "./uiContext";
+import { getAgentReply } from "@/lib/mockAgent";
 
-// The right column: an AI assistant dedicated to the selected box (DG3).
+// An AI assistant dedicated to the selected box (DG3), docked under its details.
 // Each box keeps its own chat history.
 
-export function ChatPanel({ node }: { node: TreeNode }) {
+/** The chat with this box's own agent, docked at the bottom of the side panel. */
+export function ChatDock({ node }: { node: TreeNode }) {
   const { state, dispatch } = useStore();
-  const { setChatOpen } = useUI();
   const [draft, setDraft] = useState("");
   const [typingFor, setTypingFor] = useState<string | null>(null);
+  // past conversation stays folded until asked for (or until you ask something)
+  const [showThread, setShowThread] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const messages = state.chats[node.id] ?? [];
@@ -35,6 +36,7 @@ export function ChatPanel({ node }: { node: TreeNode }) {
       message: { id: newId(), role: "user", text: question },
     });
     setDraft("");
+    setShowThread(true);
     setTypingFor(nodeId);
 
     try {
@@ -96,128 +98,92 @@ export function ChatPanel({ node }: { node: TreeNode }) {
     });
   }
 
+  const prompts =
+    node.kind === "experiment"
+      ? ["What could confound this?", "What result would change our mind?"]
+      : ["What evidence supports this?", "What would disprove it?"];
+  const noun = node.kind === "experiment" ? "experiment" : node.kind === "root" ? "paper hypothesis" : "hypothesis";
+
   return (
-    <aside className="flex h-full w-[380px] shrink-0 flex-col border-l-[3px] border-indigo-700 bg-white xl:w-[400px]">
-      {/* Header */}
-      <div className="border-b border-slate-100 px-5 py-3.5">
-        <div className="flex items-start gap-3">
-          <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-indigo-700 text-white">
-            <Bot className="size-4.5" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-indigo-700">
-                {agentLabel(node)}
-              </p>
-              <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-[9px] font-semibold text-indigo-600">
-                Claude Sonnet 5.5
-              </span>
-            </div>
-            <p className="text-[11.5px] text-slate-400">Agent for:</p>
-            <p className="line-clamp-2 text-[14px] font-semibold leading-snug text-slate-900">
-              {node.title}
-            </p>
-          </div>
-          <button
-            onClick={() => setChatOpen(false)}
-            className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-            title="Hide chat"
-          >
-            <X className="size-4" />
-          </button>
-        </div>
-        <p className="mt-2 text-[12px] leading-relaxed text-slate-400">
-          This conversation is dedicated to this {node.kind === "experiment" ? "experiment" : "hypothesis"}.
-          Each node has its own agent with its own context.
-        </p>
-      </div>
-
-      {/* Quick prompts */}
-      <div className="flex flex-col items-start gap-1.5 border-b border-slate-100 px-5 py-3">
-        {QUICK_PROMPTS.map((q) => (
-          <button
-            key={q}
-            onClick={() => send(q)}
-            disabled={Boolean(typingFor)}
-            className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[12.5px] text-slate-700 shadow-[0_1px_1px_rgba(0,0,0,0.03)] transition hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-800 disabled:opacity-50"
-          >
-            {q}
-          </button>
-        ))}
-      </div>
-
-      {/* Messages */}
-      <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
-        <AgentBubble>{agentIntro(node)}</AgentBubble>
-        {messages.map((m) =>
-          m.role === "user" ? (
-            <div key={m.id} className="flex justify-end">
-              <div className="max-w-[85%] rounded-2xl rounded-br-md bg-indigo-700 px-3.5 py-2 text-[13.5px] leading-relaxed text-white">
-                {m.text}
-              </div>
-            </div>
-          ) : (
-            <AgentBubble key={m.id}>
-              <span className="whitespace-pre-line">{m.text}</span>
-              {m.proposal && (
-                <ProposalCard
-                  message={m}
-                  onAccept={() => acceptProposal(m)}
-                />
-              )}
-            </AgentBubble>
-          ),
-        )}
-        {typing && (
-          <div className="flex w-16 items-center justify-center gap-1 rounded-2xl rounded-bl-md bg-slate-100 py-3">
-            {[0, 150, 300].map((d) => (
-              <span
-                key={d}
-                className="size-1.5 animate-bounce rounded-full bg-slate-400"
-                style={{ animationDelay: `${d}ms` }}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Input */}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          send(draft);
-        }}
-        className="flex items-end gap-2 border-t border-slate-100 px-5 py-4"
-      >
-        <textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              send(draft);
-            }
-          }}
-          rows={2}
-          placeholder="Ask this agent… (Enter to send)"
-          className="flex-1 resize-none rounded-xl border border-slate-200 px-3.5 py-2.5 text-[13.5px] text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
-        />
+    <div className="flex max-h-[60%] shrink-0 flex-col border-t border-neutral-200 bg-white">
+      {messages.length > 0 && (
         <button
-          type="submit"
-          disabled={!draft.trim() || Boolean(typingFor)}
-          className="flex size-9 items-center justify-center rounded-lg bg-indigo-700 text-white transition hover:bg-indigo-800 disabled:bg-slate-300"
-          title="Send"
+          onClick={() => setShowThread(!showThread)}
+          className="flex items-center justify-between px-5 pt-3 text-[12.5px] font-medium text-neutral-500 hover:text-neutral-900"
         >
-          <SendHorizontal className="size-4" />
+          Discussion · {messages.length} message{messages.length === 1 ? "" : "s"}
+          <ChevronUp className={`size-3.5 transition ${showThread ? "" : "rotate-180"}`} />
         </button>
-      </form>
-    </aside>
+      )}
+      {/* the conversation with this box's own agent */}
+      {(showThread || typing) && (messages.length > 0 || typing) && (
+        <div ref={scrollRef} className="min-h-0 flex-1 space-y-2.5 overflow-y-auto px-5 pb-1 pt-4">
+          {messages.map((m) =>
+            m.role === "user" ? (
+              <div key={m.id} className="flex justify-end">
+                <div className="max-w-[85%] rounded-2xl rounded-br-md bg-neutral-900 px-3.5 py-2 text-[13px] leading-relaxed text-white">
+                  {m.text}
+                </div>
+              </div>
+            ) : (
+              <AgentBubble key={m.id}>
+                <span className="whitespace-pre-line">{m.text}</span>
+                {m.proposal && <ProposalCard message={m} onAccept={() => acceptProposal(m)} />}
+              </AgentBubble>
+            ),
+          )}
+          {typing && (
+            <div className="flex w-14 items-center justify-center gap-1 rounded-2xl rounded-bl-md bg-neutral-100 py-2.5">
+              {[0, 150, 300].map((d) => (
+                <span key={d} className="size-1.5 animate-bounce rounded-full bg-neutral-400" style={{ animationDelay: `${d}ms` }} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      <div className="space-y-2.5 px-5 pb-4 pt-3">
+        <div className="flex flex-wrap gap-1.5">
+          {prompts.map((q) => (
+            <button
+              key={q}
+              onClick={() => send(q)}
+              disabled={Boolean(typingFor)}
+              className="rounded-full border border-neutral-300 bg-white px-3 py-1 text-[12.5px] text-neutral-700 transition hover:border-neutral-900 disabled:opacity-50"
+            >
+              {q}
+            </button>
+          ))}
+        </div>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            send(draft);
+          }}
+          className="flex items-center gap-2 rounded-xl border border-neutral-300 bg-white py-1.5 pl-3.5 pr-1.5 focus-within:border-neutral-900"
+        >
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder={`Ask about this ${noun}...`}
+            className="min-w-0 flex-1 bg-transparent text-[13.5px] text-neutral-900 outline-none placeholder:text-neutral-400"
+          />
+          <button
+            type="submit"
+            disabled={!draft.trim() || Boolean(typingFor)}
+            className="flex size-8 items-center justify-center rounded-lg bg-neutral-900 text-white transition hover:bg-neutral-700 disabled:bg-neutral-300"
+            title="Send"
+          >
+            <Send className="size-3.5" />
+          </button>
+        </form>
+      </div>
+    </div>
   );
 }
 
 function AgentBubble({ children }: { children: React.ReactNode }) {
   return (
-    <div className="max-w-[92%] rounded-2xl rounded-bl-md bg-slate-100 px-3.5 py-2.5 text-[13.5px] leading-relaxed text-slate-700">
+    <div className="max-w-[92%] rounded-2xl rounded-bl-md bg-neutral-100 px-3.5 py-2.5 text-[13px] leading-relaxed text-neutral-800">
       {children}
     </div>
   );
@@ -228,14 +194,10 @@ function ProposalCard({ message, onAccept }: { message: ChatMessage; onAccept: (
   const isExp = p.kind === "experiment";
   return (
     <div
-      className={`mt-3 rounded-xl border bg-white p-3 ${
-        isExp ? "border-rose-200" : "border-indigo-200"
-      }`}
+      className="mt-3 rounded-xl border border-neutral-300 bg-white p-3"
     >
       <p
-        className={`mb-1 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider ${
-          isExp ? "text-rose-600" : "text-indigo-600"
-        }`}
+        className="mb-1 flex items-center gap-1 text-[11px] font-medium text-neutral-600"
       >
         {isExp ? <FlaskConical className="size-3" /> : <GitBranch className="size-3" />}
         Proposed {isExp ? "experiment" : "sub-hypothesis"}

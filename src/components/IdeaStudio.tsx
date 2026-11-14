@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowLeft, ArrowRight, Loader2, Sparkles, Sprout, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, FlaskConical, Loader2, Route, Sparkles, Sprout, X } from "lucide-react";
 import { newId, useStore } from "@/lib/store";
 import type { ChatMessage, TreeNode } from "@/lib/types";
+import { BranchField } from "./BranchField";
 import { getJSON, leavesOf, type FieldItem } from "./FieldMapPanels";
 import { toEvidence, type FieldPaper } from "./FieldPanel";
 
@@ -51,11 +52,11 @@ const EXAMPLES = [
   "Necroptosis inside tumours makes checkpoint blockade work better",
   "Cancers that depend on mitochondrial respiration are easy to kill by cuproptosis",
 ];
-const PALETTE = ["#818cf8", "#2dd4bf", "#fbbf24", "#f472b6", "#a78bfa", "#38bdf8", "#4ade80", "#fb923c", "#c084fc", "#94a3b8"];
+const PALETTE = ["#737373", "#8a8a8a", "#636363", "#9a9a9a", "#525252", "#7d7d7d", "#a3a3a3", "#5c5c5c", "#8f8f8f", "#6b6b6b"];
 const NOVELTY = {
-  crowded: { label: "Crowded", cls: "border-amber-300/40 bg-amber-400/10 text-amber-100", dot: "#fbbf24" },
-  related: { label: "Related work", cls: "border-sky-300/40 bg-sky-400/10 text-sky-100", dot: "#38bdf8" },
-  sparse: { label: "Open ground", cls: "border-emerald-300/40 bg-emerald-400/10 text-emerald-100", dot: "#34d399" },
+  crowded: { label: "Crowded", cls: "border-amber-200 bg-amber-50 text-amber-900", dot: "#d97706" },
+  related: { label: "Related work", cls: "border-sky-200 bg-sky-50 text-sky-900", dot: "#0284c7" },
+  sparse: { label: "Open ground", cls: "border-emerald-200 bg-emerald-50 text-emerald-900", dot: "#059669" },
 };
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -218,34 +219,41 @@ export function IdeaStudio({
     <motion.div
       className="fixed inset-0 z-[100] overflow-hidden"
       initial={{ opacity: 0 }}
-      animate={{ opacity: 1, backgroundColor: dark ? "#0b1020" : "#f8fafc" }}
+      animate={{ opacity: 1, backgroundColor: dark ? "#f7f7f6" : "#f6f6f4" }}
       exit={{ opacity: 0, scale: 1.03, filter: "blur(6px)" }}
       transition={{ duration: 0.8, ease: EASE }}
     >
       {onClose && phase === "chat" && (
         <button
           onClick={onClose}
-          className="absolute right-5 top-5 z-10 flex items-center gap-1 rounded-full border border-white/10 px-3 py-1.5 text-[12.5px] text-slate-300 hover:bg-white/10"
+          className="absolute right-5 top-5 z-10 flex items-center gap-1 rounded-full border border-black/10 bg-white/70 px-3 py-1.5 text-[12.5px] text-neutral-600 backdrop-blur hover:border-neutral-900"
         >
           <X className="size-3.5" /> Back to my projects
         </button>
       )}
 
+      <AnimatePresence>
+        {phase === "chat" && (
+          <motion.div key="branches" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.8 }}>
+            <BranchField hole={{ rx: 420, ry: 400 }} dim />
+          </motion.div>
+        )}
+      </AnimatePresence>
       <AnimatePresence mode="popLayout">
         {phase === "chat" && (
           <motion.section
             key="chat"
             exit={{ opacity: 0, x: -60, filter: "blur(6px)" }}
             transition={{ duration: 0.6, ease: EASE }}
-            className="mx-auto flex h-full max-w-[760px] flex-col px-5"
+            className="relative mx-auto flex h-full max-w-[760px] flex-col px-5"
           >
             <div ref={scroller} className="flex-1 space-y-4 overflow-y-auto pb-6 pt-16">
               <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: EASE }}>
-                <p className="text-[13px] font-medium text-indigo-300">Hi {first}</p>
-                <h1 className="mt-1 text-[34px] font-semibold leading-tight tracking-tight text-white">
+                <p className="text-[13px] font-medium text-neutral-500">Hi {first}</p>
+                <h1 className="mt-1 text-[34px] font-semibold leading-tight tracking-tight text-neutral-950">
                   What are you wondering about?
                 </h1>
-                <p className="mt-2 max-w-[560px] text-[14.5px] leading-relaxed text-slate-400">
+                <p className="mt-2 max-w-[560px] text-[14.5px] leading-relaxed text-neutral-500">
                   Say it however it comes to you. Claude will shape it into a testable hypothesis, then we&apos;ll see
                   where it sits among everything the field has published.
                 </p>
@@ -261,7 +269,7 @@ export function IdeaStudio({
                     <button
                       key={e}
                       onClick={() => send(e)}
-                      className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-left text-[12.5px] text-slate-300 transition hover:border-indigo-400/50 hover:bg-indigo-500/10 hover:text-white"
+                      className="rounded-full border border-black/10 bg-white/70 px-3 py-1.5 text-left text-[12.5px] text-neutral-700 backdrop-blur transition hover:border-neutral-900 hover:text-neutral-950"
                     >
                       {e}
                     </button>
@@ -274,26 +282,26 @@ export function IdeaStudio({
                     key={m.id}
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="ml-auto w-fit max-w-[80%] rounded-2xl rounded-br-md bg-indigo-500 px-4 py-2.5 text-[14px] leading-relaxed text-white"
+                    className="ml-auto w-fit max-w-[80%] rounded-2xl rounded-br-md bg-neutral-900 px-4 py-2.5 text-[14px] leading-relaxed text-white"
                   >
                     {m.content}
                   </motion.div>
                 ) : (
                   <motion.div key={m.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-2.5">
-                    <p className="flex items-start gap-2 text-[14px] leading-relaxed text-slate-300">
-                      <Sparkles className="mt-1 size-3.5 shrink-0 text-indigo-300" /> {m.content}
+                    <p className="flex items-start gap-2 text-[14px] leading-relaxed text-neutral-700">
+                      <Sparkles className="mt-1 size-3.5 shrink-0 text-neutral-400" /> {m.content}
                     </p>
                     {m.f && <IdeaCard f={m.f} live={m.f === latest} />}
                   </motion.div>
                 ),
               )}
               {thinking && (
-                <div className="flex items-center gap-2 text-[13px] text-slate-400">
+                <div className="flex items-center gap-2 text-[13px] text-neutral-500">
                   <span className="flex gap-1">
                     {[0, 1, 2].map((i) => (
                       <motion.span
                         key={i}
-                        className="size-1.5 rounded-full bg-indigo-300"
+                        className="size-1.5 rounded-full bg-neutral-400"
                         animate={{ opacity: [0.2, 1, 0.2], y: [0, -3, 0] }}
                         transition={{ duration: 1, repeat: Infinity, delay: i * 0.15 }}
                       />
@@ -302,17 +310,17 @@ export function IdeaStudio({
                   Claude is sharpening your idea…
                 </div>
               )}
-              {error && <p className="rounded-lg bg-rose-500/15 px-3 py-2 text-[13px] text-rose-200">{error}</p>}
+              {error && <p className="rounded-lg bg-rose-50 px-3 py-2 text-[13px] text-rose-700">{error}</p>}
               {latest && !thinking && (
                 <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-wrap items-center gap-3 pt-1">
                   <button
                     onClick={place}
-                    className="group flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-500 to-emerald-500 px-5 py-2.5 text-[14px] font-semibold text-white shadow-lg shadow-indigo-500/30 transition hover:shadow-indigo-500/50"
+                    className="group flex items-center gap-2 rounded-full bg-neutral-900 px-5 py-2.5 text-[14px] font-semibold text-white shadow-lg shadow-black/10 transition hover:bg-neutral-700"
                   >
                     See where it sits in the field
                     <ArrowRight className="size-4 transition group-hover:translate-x-0.5" />
                   </button>
-                  <span className="text-[12.5px] text-slate-500">or reply below to refine it</span>
+                  <span className="text-[12.5px] text-neutral-500">or reply below to refine it</span>
                 </motion.div>
               )}
             </div>
@@ -321,7 +329,7 @@ export function IdeaStudio({
                 e.preventDefault();
                 send(draft);
               }}
-              className="mb-6 flex items-end gap-2 rounded-2xl border border-white/10 bg-white/[0.06] p-2 backdrop-blur focus-within:border-indigo-400/60"
+              className="mb-6 flex items-end gap-2 rounded-2xl border border-black/10 bg-white/80 p-2 shadow-sm backdrop-blur focus-within:border-neutral-900"
             >
               <textarea
                 value={draft}
@@ -335,11 +343,11 @@ export function IdeaStudio({
                 }}
                 rows={msgs.length ? 1 : 2}
                 placeholder={msgs.length ? "Refine it: narrow the system, change the mechanism…" : "e.g. I think resistant cells survive by…"}
-                className="max-h-40 min-h-10 flex-1 resize-none bg-transparent px-2 py-2 text-[14.5px] text-white placeholder:text-slate-500 focus:outline-none"
+                className="max-h-40 min-h-10 flex-1 resize-none bg-transparent px-2 py-2 text-[14.5px] text-neutral-900 placeholder:text-neutral-400 focus:outline-none"
               />
               <button
                 disabled={!draft.trim() || thinking}
-                className="flex size-10 items-center justify-center rounded-xl bg-indigo-500 text-white transition hover:bg-indigo-400 disabled:opacity-40"
+                className="flex size-10 items-center justify-center rounded-xl bg-neutral-900 text-white transition hover:bg-neutral-700 disabled:opacity-30"
               >
                 {thinking ? <Loader2 className="size-4 animate-spin" /> : <ArrowRight className="size-4" />}
               </button>
@@ -360,15 +368,15 @@ export function IdeaStudio({
               <motion.p
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="pointer-events-none absolute left-6 top-6 text-[12px] uppercase tracking-[0.2em] text-slate-500"
+                className="pointer-events-none absolute left-6 top-6 text-[12px] uppercase tracking-[0.2em] text-neutral-400"
               >
                 Field map · {tree?.count.toLocaleString() ?? "…"} papers
               </motion.p>
             </div>
-            <div className="flex w-[min(460px,42vw)] flex-col gap-4 overflow-y-auto border-l border-white/10 bg-white/[0.03] p-6">
+            <div className="flex w-[min(460px,42vw)] flex-col gap-4 overflow-y-auto border-l border-black/10 bg-white/70 p-6 backdrop-blur">
               <button
                 onClick={() => setPhase("chat")}
-                className="flex w-fit items-center gap-1 text-[12.5px] text-slate-400 hover:text-white"
+                className="flex w-fit items-center gap-1 text-[12.5px] text-neutral-500 hover:text-neutral-900"
               >
                 <ArrowLeft className="size-3.5" /> Refine the idea
               </button>
@@ -386,7 +394,7 @@ export function IdeaStudio({
                       <p className="mb-0.5 text-[11px] font-bold uppercase tracking-wider">{NOVELTY[located.novelty_level].label}</p>
                       {located.novelty_hint}
                     </div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Closest work</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">Closest work</p>
                     {located.nearest.slice(0, 4).map((p, i) => (
                       <motion.a
                         key={p.id}
@@ -396,10 +404,10 @@ export function IdeaStudio({
                         initial={{ opacity: 0, x: 12 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: 0.15 * i }}
-                        className="block rounded-lg border border-white/10 bg-white/[0.04] p-2.5 text-[12.5px] leading-snug text-slate-200 hover:border-white/25"
+                        className="block rounded-lg border border-black/10 bg-white p-2.5 text-[12.5px] leading-snug text-neutral-800 hover:border-neutral-900"
                       >
                         {p.title}
-                        <span className="mt-0.5 block text-[11px] text-slate-500">
+                        <span className="mt-0.5 block text-[11px] text-neutral-500">
                           {surname(p.authors?.[0])} {p.authors && p.authors.length > 1 ? "et al." : ""} ·{" "}
                           {new Date(p.announced * 1000).getFullYear()}
                         </span>
@@ -408,7 +416,7 @@ export function IdeaStudio({
                     <button
                       onClick={grow}
                       disabled={!candidates && !candError}
-                      className="group mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-indigo-500 py-3 text-[14px] font-semibold text-white shadow-lg shadow-emerald-500/20 transition disabled:opacity-70"
+                      className="group mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-neutral-900 py-3 text-[14px] font-semibold text-white shadow-lg shadow-black/10 transition hover:bg-neutral-700 disabled:opacity-70"
                     >
                       {candidates || candError ? (
                         <>
@@ -421,7 +429,7 @@ export function IdeaStudio({
                       )}
                     </button>
                     {candError && (
-                      <p className="text-[11.5px] text-slate-500">
+                      <p className="text-[11.5px] text-neutral-500">
                         Claude couldn&apos;t draft branches ({candError.slice(0, 80)}); the tree will start with just your
                         hypothesis.
                       </p>
@@ -429,7 +437,7 @@ export function IdeaStudio({
                   </motion.div>
                 )}
               </AnimatePresence>
-              {error && <p className="rounded-lg bg-rose-500/15 px-3 py-2 text-[13px] text-rose-200">{error}</p>}
+              {error && <p className="rounded-lg bg-rose-50 px-3 py-2 text-[13px] text-rose-700">{error}</p>}
             </div>
           </motion.section>
         )}
@@ -445,19 +453,19 @@ export function IdeaStudio({
 function IdeaCard({ f, live }: { f: Formulation; live: boolean }) {
   const parts = (
     [
-      ["problem", f.problem, "text-sky-200 bg-sky-400/10 border-sky-300/20"],
-      ["method", f.method, "text-amber-100 bg-amber-400/10 border-amber-300/20"],
-      ["setting", f.setting, "text-emerald-100 bg-emerald-400/10 border-emerald-300/20"],
+      ["problem", f.problem, "text-neutral-700 bg-neutral-100 border-black/5"],
+      ["method", f.method, "text-neutral-700 bg-neutral-100 border-black/5"],
+      ["setting", f.setting, "text-neutral-700 bg-neutral-100 border-black/5"],
     ] as const
   ).filter(([, v]) => v);
   return (
     <motion.div
       layoutId={live ? "idea-card" : undefined}
       transition={{ duration: 0.8, ease: EASE }}
-      className="rounded-2xl border border-indigo-300/25 bg-gradient-to-br from-indigo-500/15 to-emerald-500/10 p-4 shadow-xl shadow-indigo-950/40"
+      className="rounded-2xl border border-black/10 bg-white/85 p-4 shadow-[0_8px_30px_rgba(0,0,0,0.06)] backdrop-blur"
     >
-      <p className="text-[10.5px] font-bold uppercase tracking-[0.18em] text-indigo-300">Hypothesis</p>
-      <p className="mt-1.5 text-[17px] font-medium leading-snug text-white">{f.hypothesis}</p>
+      <p className="text-[10.5px] font-bold uppercase tracking-[0.18em] text-neutral-400">Hypothesis</p>
+      <p className="mt-1.5 text-[17px] font-semibold leading-snug text-neutral-950">{f.hypothesis}</p>
       {parts.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {parts.map(([k, v, cls]) => (
@@ -468,7 +476,7 @@ function IdeaCard({ f, live }: { f: Formulation; live: boolean }) {
           ))}
         </div>
       )}
-      {f.why && <p className="mt-2.5 text-[12.5px] leading-relaxed text-slate-400">{f.why}</p>}
+      {f.why && <p className="mt-2.5 text-[12.5px] leading-relaxed text-neutral-500">{f.why}</p>}
     </motion.div>
   );
 }
@@ -476,14 +484,14 @@ function IdeaCard({ f, live }: { f: Formulation; live: boolean }) {
 function PathReveal({ located, step }: { located: Located | null; step: number }) {
   if (!located)
     return (
-      <p className="flex items-center gap-2 text-[13px] text-slate-400">
+      <p className="flex items-center gap-2 text-[13px] text-neutral-500">
         <Loader2 className="size-3.5 animate-spin" /> Comparing it with every paper on the map…
       </p>
     );
   const labels = located.path.map((p) => p.label);
   return (
     <div className="space-y-1">
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
         {located.placement_confidence >= 0.35 ? "It lands in" : "Closest fit (no clear home yet)"}
       </p>
       <div className="flex flex-wrap items-center gap-1.5 text-[14px]">
@@ -494,9 +502,9 @@ function PathReveal({ located, step }: { located: Located | null; step: number }
                 initial={{ opacity: 0, y: 6, filter: "blur(4px)" }}
                 animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                 transition={{ duration: 0.5, ease: EASE }}
-                className={`flex items-center gap-1.5 ${i === labels.length - 1 ? "font-semibold text-white" : "text-slate-300"}`}
+                className={`flex items-center gap-1.5 ${i === labels.length - 1 ? "font-semibold text-neutral-950" : "text-neutral-500"}`}
               >
-                {i > 0 && <span className="text-slate-600">›</span>}
+                {i > 0 && <span className="text-neutral-300">›</span>}
                 {l}
               </motion.span>
             )}
@@ -601,7 +609,7 @@ function FieldCamera({ tree, located, step }: { tree: FieldItem | null; located:
                 cx={b.x}
                 cy={b.y}
                 r={7 + Math.sqrt(b.count) * 0.55}
-                fill={b.color}
+                fill={b.id === branchId && step >= 1 ? "#111" : b.color}
                 fillOpacity={0.9}
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
@@ -610,7 +618,7 @@ function FieldCamera({ tree, located, step }: { tree: FieldItem | null; located:
               />
             </g>
           ))}
-          <circle cx={WORLD.cx} cy={WORLD.cy} r={14} fill="#e2e8f0" fillOpacity={0.9} />
+          <circle cx={WORLD.cx} cy={WORLD.cy} r={14} fill="#111" />
           {/* landing: rings and the closest papers */}
           {tt && step >= 2 && (
             <g>
@@ -630,15 +638,15 @@ function FieldCamera({ tree, located, step }: { tree: FieldItem | null; located:
               {step >= 3 &&
                 dots.map((d, i) => (
                   <motion.g key={d.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.06 * i }}>
-                    <line x1={tt.x} y1={tt.y} x2={tt.x + d.dx} y2={tt.y + d.dy} stroke="#e2e8f0" strokeOpacity={0.25} strokeWidth={0.3} />
-                    <circle cx={tt.x + d.dx} cy={tt.y + d.dy} r={1.4} fill="#e2e8f0" fillOpacity={0.85} />
+                    <line x1={tt.x} y1={tt.y} x2={tt.x + d.dx} y2={tt.y + d.dy} stroke="#404040" strokeOpacity={0.35} strokeWidth={0.3} />
+                    <circle cx={tt.x + d.dx} cy={tt.y + d.dy} r={1.4} fill="#404040" fillOpacity={0.9} />
                   </motion.g>
                 ))}
               <motion.circle
                 cx={tt.x}
                 cy={tt.y}
                 r={3.2}
-                fill="#fff"
+                fill="#111"
                 initial={{ scale: 0 }}
                 animate={{ scale: [0, 1.6, 1] }}
                 transition={{ duration: 0.7 }}
@@ -651,7 +659,7 @@ function FieldCamera({ tree, located, step }: { tree: FieldItem | null; located:
         {layout?.map((b) => (
           <div key={b.id}>
             <div
-              className="pointer-events-none absolute w-[150px] -translate-x-1/2 text-center text-[11px] font-semibold leading-tight text-slate-200"
+              className="pointer-events-none absolute w-[150px] -translate-x-1/2 text-center text-[11px] font-semibold leading-tight text-neutral-700"
               style={{
                 left: b.x,
                 top: b.y + 14 + Math.sqrt(b.count) * 0.55,
@@ -669,7 +677,7 @@ function FieldCamera({ tree, located, step }: { tree: FieldItem | null; located:
                   initial={{ opacity: 0 }}
                   animate={{ opacity: t.id === target ? 1 : 0.6 }}
                   className={`pointer-events-none absolute w-[90px] -translate-x-1/2 text-center leading-tight ${
-                    t.id === target ? "text-[5.5px] font-bold text-white" : "text-[4.5px] text-slate-300"
+                    t.id === target ? "text-[5.5px] font-bold text-neutral-950" : "text-[4.5px] text-neutral-500"
                   }`}
                   style={{ left: t.x, top: t.y + 5 }}
                 >
@@ -679,14 +687,14 @@ function FieldCamera({ tree, located, step }: { tree: FieldItem | null; located:
           </div>
         ))}
         <div
-          className="pointer-events-none absolute w-[100px] -translate-x-1/2 text-center text-[12px] font-bold text-white"
+          className="pointer-events-none absolute w-[100px] -translate-x-1/2 text-center text-[12px] font-bold text-neutral-950"
           style={{ left: WORLD.cx, top: WORLD.cy + 18, opacity: step >= 1 ? 0 : 1, transition: "opacity .8s" }}
         >
           {tree?.label}
         </div>
       </div>
       {!tree && (
-        <div className="absolute inset-0 flex items-center justify-center text-[13px] text-slate-500">
+        <div className="absolute inset-0 flex items-center justify-center text-[13px] text-neutral-500">
           <Loader2 className="mr-2 size-4 animate-spin" /> Loading the field…
         </div>
       )}
@@ -694,74 +702,78 @@ function FieldCamera({ tree, located, step }: { tree: FieldItem | null; located:
   );
 }
 
-// ── the tree grows out of the idea ───────────────────────────────────────────
+// ── the tree grows out of the idea, left to right like the tree it becomes ───
 
 function Grow({ f, candidates, located }: { f: Formulation; candidates: Candidate[]; located: Located | null }) {
   const n = candidates.length;
-  const W = Math.max(3, n) * 270;
+  const ROW = 118;
+  const H = Math.max(240, n * ROW);
   const nov = located ? { crowded: "crowded field", related: "related work", sparse: "open ground" }[located.novelty_level] : null;
   return (
-    <motion.section
-      key="grow"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="flex h-full flex-col items-center justify-center px-6"
-    >
-      <motion.div
-        layoutId="idea-card"
-        transition={{ duration: 0.9, ease: EASE }}
-        className="relative z-10 w-[min(560px,90vw)] rounded-xl border border-slate-300 bg-slate-100 px-5 py-4 shadow-lg"
-      >
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Paper hypothesis</p>
-        <p className="mt-1 text-[15px] font-semibold leading-snug text-slate-900">{f.hypothesis}</p>
-        {nov && (
-          <span className="mt-2 inline-block rounded border border-amber-200 bg-amber-50 px-1.5 py-px text-[10px] font-semibold text-amber-800">
-            {nov}
-          </span>
+    <motion.section key="grow" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex h-full flex-col items-center justify-center px-6">
+      <div className="flex items-center">
+        <motion.div
+          layoutId="idea-card"
+          transition={{ duration: 0.9, ease: EASE }}
+          className="relative z-10 w-[min(300px,34vw)] rounded-xl border border-neutral-300 bg-neutral-200/80 px-4 py-4"
+        >
+          <p className="text-[11px] font-medium text-neutral-500">Paper hypothesis</p>
+          <p className="mt-1.5 text-[14.5px] font-semibold leading-[1.45] text-neutral-900">{f.hypothesis}</p>
+          {nov && <p className="mt-2 text-[11px] text-neutral-400">{nov}</p>}
+        </motion.div>
+        {n > 0 && (
+          <>
+            <svg width={90} height={H} className="shrink-0 overflow-visible">
+              {candidates.map((c, i) => {
+                const y = i * ROW + ROW / 2 + (H - n * ROW) / 2;
+                return (
+                  <motion.path
+                    key={i}
+                    d={`M 0 ${H / 2} C 50 ${H / 2}, 40 ${y}, 90 ${y}`}
+                    fill="none"
+                    stroke="#a3a3a3"
+                    strokeWidth={1.4 + (c.confidence ?? 0.5) * 2.6}
+                    initial={{ pathLength: 0 }}
+                    animate={{ pathLength: 1 }}
+                    transition={{ duration: 0.6, delay: 0.9 + i * 0.22, ease: EASE }}
+                  />
+                );
+              })}
+            </svg>
+            <div className="flex flex-col justify-center" style={{ height: H }}>
+              {candidates.map((c, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, x: -20, scale: 0.92 }}
+                  animate={{ opacity: 1, x: 0, scale: 1 }}
+                  transition={{ duration: 0.55, delay: 1.25 + i * 0.22, ease: EASE }}
+                  className={`my-[9px] w-[min(240px,30vw)] rounded-[10px] border px-3 py-2.5 ${
+                    c.kind === "experiment" ? "border-neutral-300 bg-neutral-50" : "border-neutral-300 bg-white"
+                  }`}
+                  style={{ minHeight: ROW - 18 }}
+                >
+                  <p className="flex items-center gap-1.5 text-[11px] font-medium text-neutral-600">
+                    {c.kind === "experiment" ? <FlaskConical className="size-3.5" /> : <Route className="size-3.5" />}
+                    {c.kind === "experiment" ? "Experiment" : "Hypothesis"}
+                    <span className="ml-auto truncate text-neutral-400">{c.lens}</span>
+                  </p>
+                  <p className="mt-1 line-clamp-3 text-[12.5px] leading-snug text-neutral-800">{c.title}</p>
+                  {c.kind !== "experiment" && (
+                    <p className="mt-1.5 text-[11px] text-neutral-500">
+                      <b className="font-semibold text-neutral-800">{Math.round((c.confidence ?? 0.5) * 100)}%</b> · 0 papers
+                    </p>
+                  )}
+                </motion.div>
+              ))}
+            </div>
+          </>
         )}
-      </motion.div>
-      <div className="relative" style={{ width: `min(${W}px, 94vw)`, height: 210 }}>
-        <svg className="absolute inset-0 h-full w-full overflow-visible" viewBox={`0 0 ${W} 210`} preserveAspectRatio="none">
-          {candidates.map((c, i) => {
-            const x = ((i + 0.5) * W) / n;
-            return (
-              <motion.path
-                key={i}
-                d={`M ${W / 2} 0 C ${W / 2} 60, ${x} 40, ${x} 96`}
-                fill="none"
-                stroke={c.kind === "experiment" ? "#fb7185" : "#818cf8"}
-                strokeWidth={2}
-                initial={{ pathLength: 0 }}
-                animate={{ pathLength: 1 }}
-                transition={{ duration: 0.7, delay: 0.9 + i * 0.25, ease: EASE }}
-              />
-            );
-          })}
-        </svg>
-        {candidates.map((c, i) => (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0, y: -24, scale: 0.85 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.6, delay: 1.4 + i * 0.25, ease: EASE }}
-            className={`absolute top-[96px] w-[240px] -translate-x-1/2 rounded-lg border-[1.5px] bg-white px-3 py-2.5 shadow-sm ${
-              c.kind === "experiment" ? "border-rose-400" : "border-indigo-400"
-            }`}
-            style={{ left: `${((i + 0.5) * 100) / n}%` }}
-          >
-            <p className={`text-[9px] font-bold uppercase tracking-wider ${c.kind === "experiment" ? "text-rose-600" : "text-indigo-600"}`}>
-              {c.kind === "experiment" ? "Experiment" : "Sub-hypothesis"}
-              <span className="ml-1.5 font-medium normal-case tracking-normal text-slate-400">{c.lens}</span>
-            </p>
-            <p className="mt-1 line-clamp-3 text-[11.5px] leading-snug text-slate-700">{c.title}</p>
-          </motion.div>
-        ))}
       </div>
       <motion.p
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 1.8 + n * 0.25 }}
-        className="mt-10 flex items-center gap-2 text-[13px] text-slate-500"
+        transition={{ delay: 1.6 + n * 0.22 }}
+        className="mt-10 flex items-center gap-2 text-[13px] text-neutral-500"
       >
         <Loader2 className="size-3.5 animate-spin" /> Opening your hypothesis tree…
       </motion.p>

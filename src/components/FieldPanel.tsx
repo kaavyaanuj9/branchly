@@ -87,9 +87,7 @@ export function FieldPanel({ node, parent }: { node: TreeNode; parent?: TreeNode
   ];
   return (
     <section className="space-y-2">
-      <h3 className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-        In the field
-      </h3>
+      <h3 className="text-[13px] font-medium text-neutral-500">In the field</h3>
       <div className="flex flex-wrap gap-1">
         {tabs.map((t) => (
           <button
@@ -97,8 +95,8 @@ export function FieldPanel({ node, parent }: { node: TreeNode; parent?: TreeNode
             onClick={() => setTab(tab === t.id ? null : t.id)}
             className={`flex items-center gap-1 rounded-md border px-2 py-1 text-[12px] font-medium transition ${
               tab === t.id
-                ? "border-emerald-600 bg-emerald-600 text-white"
-                : "border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:text-emerald-700"
+                ? "border-neutral-900 bg-neutral-900 text-white"
+                : "border-slate-200 bg-white text-slate-600 hover:border-neutral-500 hover:text-neutral-900"
             }`}
           >
             {t.icon} {t.label}
@@ -168,7 +166,7 @@ export function PaperRow({ paper, node, extra }: { paper: FieldPaper; node?: Tre
           href={paper.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="font-medium text-slate-800 hover:text-emerald-700 hover:underline"
+          className="font-medium text-slate-800 hover:text-neutral-900 hover:underline"
         >
           {paper.title}
         </a>
@@ -182,7 +180,7 @@ export function PaperRow({ paper, node, extra }: { paper: FieldPaper; node?: Tre
                 ? "Already in this box's evidence"
                 : `Add to the evidence of "${node.title.slice(0, 60)}"`
           }
-          className="flex shrink-0 items-center gap-0.5 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-600 hover:border-emerald-300 hover:text-emerald-700 disabled:opacity-60"
+          className="flex shrink-0 items-center gap-0.5 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-600 hover:border-neutral-500 hover:text-neutral-900 disabled:opacity-60"
         >
           {added ? <Check className="size-3" /> : <Plus className="size-3" />} Evidence
         </button>
@@ -199,7 +197,7 @@ export function PaperRow({ paper, node, extra }: { paper: FieldPaper; node?: Tre
         {nav && (
           <>
             {" · "}
-            <button onClick={() => nav.openPaper(paper.id)} className="text-emerald-700 hover:underline">
+            <button onClick={() => nav.openPaper(paper.id)} className="text-neutral-900 hover:underline">
               lineage
             </button>
           </>
@@ -256,7 +254,7 @@ function WhereItSits({ node, parent }: { node: TreeNode; parent?: TreeNode }) {
           ))}
           <button
             onClick={() => openFieldMap(data.node)}
-            className="inline-flex items-center gap-1 text-[12px] font-medium text-emerald-700 hover:underline"
+            className="inline-flex items-center gap-1 text-[12px] font-medium text-neutral-900 hover:underline"
           >
             Show on the field map <Map className="size-3" />
           </button>
@@ -319,7 +317,7 @@ export function TestedCheck({
                   ? "e.g. CRISPR knockout of BCL2"
                   : "e.g. venetoclax resistance in AML"
             }
-            className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[12.5px] font-normal normal-case tracking-normal text-slate-800 focus:border-emerald-400 focus:outline-none"
+            className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[12.5px] font-normal normal-case tracking-normal text-slate-800 focus:border-neutral-900 focus:outline-none"
           />
         </label>
       ))}
@@ -329,7 +327,7 @@ export function TestedCheck({
           setRan(true);
           run();
         }}
-        className="w-full rounded-lg bg-emerald-600 py-1.5 text-[12.5px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+        className="w-full rounded-lg bg-neutral-900 py-1.5 text-[12.5px] font-semibold text-white hover:bg-neutral-700 disabled:opacity-50"
       >
         Check the field (about 10 s)
       </button>
@@ -350,7 +348,7 @@ export function TestedCheck({
                   <div className="mt-1.5 space-y-1">
                     {Object.entries(p.evidence).map(([k, v]) => (
                       <p key={k} className="text-[11.5px] text-slate-600">
-                        <span className="font-semibold uppercase text-emerald-700">{k}</span> “{v.slice(0, 180)}”
+                        <span className="font-semibold uppercase text-neutral-900">{k}</span> “{v.slice(0, 180)}”
                       </p>
                     ))}
                     {p.strength && (
@@ -576,7 +574,7 @@ function WatchField({ node }: { node: TreeNode }) {
         <button
           onClick={create}
           disabled={busy}
-          className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 py-1.5 text-[12.5px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-neutral-900 py-1.5 text-[12.5px] font-semibold text-white hover:bg-neutral-700 disabled:opacity-50"
         >
           {busy ? <Loader2 className="size-3 animate-spin" /> : <BellRing className="size-3" />} Watch the field for this
         </button>
@@ -592,7 +590,7 @@ function WatchField({ node }: { node: TreeNode }) {
         </span>
         <button
           onClick={refresh}
-          className="flex items-center gap-1 text-emerald-700 hover:underline"
+          className="flex items-center gap-1 text-neutral-900 hover:underline"
           disabled={busy}
         >
           <RefreshCw className={`size-3 ${busy ? "animate-spin" : ""}`} /> Check now

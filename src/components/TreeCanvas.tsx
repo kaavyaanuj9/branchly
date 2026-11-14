@@ -1,73 +1,57 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
-import {
-  Background,
-  BackgroundVariant,
-  Controls,
-  ReactFlow,
-  useReactFlow,
-  type Edge,
-} from "@xyflow/react";
+import { Background, BackgroundVariant, Panel, ReactFlow, useReactFlow, type Edge } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import { Minus, Plus } from "lucide-react";
 import { useStore } from "@/lib/store";
-import { childrenOf, descendantIds, layoutTree, NODE_WIDTH } from "@/lib/tree";
+import { childrenOf, descendantIds, layoutTree, NODE_WIDTH, pathTo } from "@/lib/tree";
 import { HypoNode, type HypoFlowNode } from "./HypoNode";
 
-// The zoomable, pannable tree. We turn our tree data into the "nodes" and
-// "edges" (lines) that React Flow knows how to draw.
+// The zoomable, pannable tree, left to right. Lines are gray and thicker where the AI is
+// more confident about the link; the path from the main idea to the selected box is dark.
 
 const nodeTypes = { hypo: HypoNode };
 
 export function TreeCanvas() {
   const { state, dispatch } = useStore();
-  const { fitView, setCenter, getZoom } = useReactFlow();
+  const { fitView, setCenter, getZoom, zoomIn, zoomOut } = useReactFlow();
 
   const { flowNodes, flowEdges } = useMemo(() => {
     const placed = layoutTree(state.nodes);
     const visible = new Set(placed.map((p) => p.node.id));
+    const onPath = pathTo(state.nodes, state.selectedId);
 
-    const flowNodes: HypoFlowNode[] = placed.map(({ node, x, y, depth }) => {
-      // The main idea is a bit wider; shift it so it stays centred.
-      const width = node.kind === "root" ? NODE_WIDTH + 70 : NODE_WIDTH;
-      return {
-        id: node.id,
-        type: "hypo",
-        position: { x: x - (width - NODE_WIDTH) / 2, y },
-        selected: node.id === state.selectedId,
-        draggable: false,
-        data: {
-          node,
-          depth,
-          childCount: childrenOf(state.nodes, node.id).length,
-          hiddenCount: descendantIds(state.nodes, node.id).length,
-        },
-      };
-    });
+    const flowNodes: HypoFlowNode[] = placed.map(({ node, x, y, depth }) => ({
+      id: node.id,
+      type: "hypo",
+      position: { x, y },
+      selected: node.id === state.selectedId,
+      draggable: false,
+      data: {
+        node,
+        depth,
+        childCount: childrenOf(state.nodes, node.id).length,
+        hiddenCount: descendantIds(state.nodes, node.id).length,
+      },
+    }));
 
     const flowEdges: Edge[] = state.nodes
       .filter((n) => n.parentId && visible.has(n.id) && visible.has(n.parentId))
       .map((n) => {
-        // Thicker line = AI is more confident about this link (slide 11).
-        const width = 1 + (n.confidence ?? 0.5) * 2.6;
-        const color = n.folded
-          ? "#cbd5e1"
-          : n.kind === "experiment"
-            ? "#e3a3a3"
-            : n.kind === "suggestion"
-              ? "#38bdf8"
-              : "#8b97e6";
+        const dark = onPath.has(n.id) && onPath.has(n.parentId!);
+        const dashed = n.kind === "suggestion" || n.folded;
+        const width = dashed ? 1.2 : 1.2 + (n.confidence ?? 0.5) * 3;
         return {
           id: `${n.parentId}-${n.id}`,
           source: n.parentId!,
           target: n.id,
           type: "default",
-          animated: n.kind === "suggestion",
           selectable: false,
           style: {
-            stroke: color,
-            strokeWidth: width,
-            strokeDasharray: n.kind === "suggestion" || n.folded ? "5 4" : undefined,
+            stroke: dark ? "#262626" : n.folded ? "#d4d4d4" : dashed ? "#8a8a8a" : "#b8b8b8",
+            strokeWidth: dark ? width + 0.6 : width,
+            strokeDasharray: dashed ? "4 4" : undefined,
           },
         };
       });
@@ -75,20 +59,18 @@ export function TreeCanvas() {
     return { flowNodes, flowEdges };
   }, [state.nodes, state.selectedId]);
 
-  // Move the view when something changes:
-  // - a box is selected: glide to it so it stays visible next to the panels
-  // - nothing selected: zoom out to show the whole tree
+  // Glide to a selected box; with nothing selected, show the whole tree.
   const shapeKey = flowNodes.map((n) => n.id).join("|");
   const selectedNode = flowNodes.find((n) => n.id === state.selectedId);
   const focusX = selectedNode ? selectedNode.position.x + NODE_WIDTH / 2 : null;
-  const focusY = selectedNode ? selectedNode.position.y + 70 : null;
+  const focusY = selectedNode ? selectedNode.position.y + 50 : null;
   const firstFit = useRef(true);
   useEffect(() => {
     const t = setTimeout(() => {
-      if (focusX !== null && focusY !== null) {
+      if (focusX !== null && focusY !== null && !firstFit.current) {
         setCenter(focusX, focusY, { zoom: Math.max(getZoom(), 0.85), duration: 450 });
       } else {
-        fitView({ padding: 0.15, duration: firstFit.current ? 0 : 450, maxZoom: 1.1 });
+        fitView({ padding: 0.08, duration: firstFit.current ? 0 : 450, maxZoom: 1.05 });
       }
       firstFit.current = false;
     }, 60);
@@ -107,10 +89,25 @@ export function TreeCanvas() {
       maxZoom={2}
       proOptions={{ hideAttribution: true }}
       fitView
+      fitViewOptions={{ padding: 0.08, maxZoom: 1.05 }}
     >
-      <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="#d4d8e0" />
-      <Controls position="bottom-left" showInteractive={false} />
-
+      <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="#d9d9d6" />
+      <Panel position="bottom-left" className="!m-5 flex flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm">
+        <button onClick={() => zoomIn({ duration: 200 })} title="Zoom in" className="flex size-8 items-center justify-center text-neutral-700 hover:bg-neutral-100">
+          <Plus className="size-4" />
+        </button>
+        <span className="h-px bg-neutral-200" />
+        <button onClick={() => zoomOut({ duration: 200 })} title="Zoom out" className="flex size-8 items-center justify-center text-neutral-700 hover:bg-neutral-100">
+          <Minus className="size-4" />
+        </button>
+      </Panel>
+      <Panel position="bottom-right" className="!m-5 flex items-center gap-2 rounded-lg border border-neutral-200 bg-white/90 px-3 py-2 text-[11.5px] text-neutral-600 shadow-sm backdrop-blur">
+        Confidence <span className="text-neutral-400">low</span>
+        {[1, 1.5, 2.2].map((w) => (
+          <span key={w} className="h-3.5 w-5 rounded-[4px] border-neutral-500" style={{ borderWidth: w }} />
+        ))}
+        <span className="text-neutral-400">high</span>
+      </Panel>
     </ReactFlow>
   );
 }

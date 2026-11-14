@@ -1,281 +1,215 @@
 "use client";
 
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
-import {
-  BookOpen,
-  Check,
-  ChevronDown,
-  FlaskConical,
-  GitBranch,
-  Pencil,
-  Search,
-  Sparkles,
-  Archive,
-  BellRing,
-  X,
-} from "lucide-react";
+import { Archive, BellRing, Check, ChevronRight, CircleDot, FlaskConical, Route, Sparkles, X } from "lucide-react";
 import type { TreeNode } from "@/lib/types";
 import { useStore } from "@/lib/store";
-import { NODE_WIDTH } from "@/lib/tree";
+import { NODE_WIDTH, ROOT_WIDTH } from "@/lib/tree";
 import { unseenHits } from "./FieldSync";
-import { StatusBadge } from "./StatusBadge";
-import { useUI } from "./uiContext";
 
-// One box in the tree. React Flow draws it at the position we calculated.
+// One box in the tree, drawn left to right:
+//   Paper hypothesis (the main idea) -> Hypothesis -> Prediction -> Experiment -> Suggested
+// A "prediction" is a sub-hypothesis below another hypothesis: the thing an experiment tests.
 
 export type HypoFlowNode = Node<
   { node: TreeNode; depth: number; childCount: number; hiddenCount: number },
   "hypo"
 >;
 
-const NOVELTY = {
-  crowded: { label: "crowded field", cls: "border-amber-200 bg-amber-50 text-amber-800" },
-  related: { label: "related work", cls: "border-sky-200 bg-sky-50 text-sky-800" },
-  sparse: { label: "open ground", cls: "border-emerald-200 bg-emerald-50 text-emerald-800" },
+const OUTCOME = {
+  supported: { label: "Supported", run: "Run", icon: Check, text: "text-emerald-700", card: "border-emerald-300 bg-emerald-50/70" },
+  contradicted: { label: "Contradicted", run: "Run", icon: X, text: "text-rose-700", card: "border-rose-300 bg-rose-50/70" },
+  inconclusive: { label: "Unclear", run: "Run", icon: CircleDot, text: "text-amber-700", card: "border-amber-300 bg-amber-50/60" },
 } as const;
 
-/** What the field says about this box: how crowded it is, and new papers from its alert. */
-function FieldChips({ node }: { node: TreeNode }) {
-  const fresh = unseenHits(node);
-  if (!node.fieldNovelty && !fresh) return null;
-  const nov = node.fieldNovelty ? NOVELTY[node.fieldNovelty] : null;
-  return (
-    <span className="flex flex-wrap items-center gap-1">
-      {nov && (
-        <span
-          title={`Field map: ${node.fieldRelevant ?? "?"} of the 20 closest papers directly address this${
-            node.fieldNoHome ? " (no clear home on the map)" : ""
-          }`}
-          className={`rounded border px-1 py-px text-[8.5px] font-semibold ${nov.cls}`}
-        >
-          {nov.label}
-        </span>
-      )}
-      {fresh > 0 && (
-        <span
-          title="New papers matched this box's field alert. Open the box: In the field › Watch."
-          className="flex items-center gap-0.5 rounded bg-rose-600 px-1 py-px text-[8.5px] font-bold text-white"
-        >
-          <BellRing className="size-2.5" /> {fresh} new
-        </span>
-      )}
-    </span>
-  );
-}
+const NOVELTY = { crowded: "crowded field", related: "related work", sparse: "open ground" } as const;
+
+const handles = (
+  <>
+    <Handle type="target" position={Position.Left} className="!opacity-0" />
+    <Handle type="source" position={Position.Right} className="!opacity-0" />
+  </>
+);
 
 export function HypoNode({ data, selected }: NodeProps<HypoFlowNode>) {
   const { node, depth, childCount, hiddenCount } = data;
   const { dispatch } = useStore();
-  const { openEditor, openPaperSearch } = useUI();
-
   const stop = (e: React.MouseEvent) => e.stopPropagation();
 
-  const toggle = (
-    <>
-      <Handle type="target" position={Position.Top} className="!opacity-0" />
-      <Handle type="source" position={Position.Bottom} className="!opacity-0" />
-      {childCount > 0 && !node.folded && (
-        <button
-          onClick={(e) => {
-            stop(e);
-            dispatch({ type: "toggleCollapse", id: node.id });
-          }}
-          title={node.collapsed ? "Expand branch" : "Collapse branch"}
-          className="nodrag absolute -bottom-3 left-1/2 z-10 flex h-6 min-w-6 -translate-x-1/2 items-center justify-center gap-0.5 rounded-full border border-slate-200 bg-white px-1.5 text-[10px] font-semibold text-slate-500 shadow-sm transition hover:border-slate-400 hover:text-slate-800"
-        >
-          {node.collapsed ? (
-            <>+{hiddenCount}</>
-          ) : (
-            <ChevronDown className="size-3.5 rotate-180" />
-          )}
-        </button>
-      )}
-    </>
-  );
+  const toggle =
+    childCount > 0 && !node.folded ? (
+      <button
+        onClick={(e) => {
+          stop(e);
+          dispatch({ type: "toggleCollapse", id: node.id });
+        }}
+        title={node.collapsed ? "Expand branch" : "Collapse branch"}
+        className="nodrag absolute -right-3 top-1/2 z-10 flex h-5 min-w-5 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-300 bg-white px-1 text-[10px] font-semibold text-neutral-500 opacity-0 shadow-sm transition group-hover:opacity-100 hover:text-neutral-900 data-[on=true]:opacity-100"
+        data-on={node.collapsed}
+      >
+        {node.collapsed ? `+${hiddenCount}` : <ChevronRight className="size-3 rotate-180" />}
+      </button>
+    ) : null;
 
-  // ── Folded-away idea: compact grey card ──────────────────────────────────
-  if (node.folded) {
+  // ── folded away: a quiet dashed card ──
+  if (node.folded)
     return (
       <div
         style={{ width: NODE_WIDTH }}
-        className={`relative rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-2.5 text-slate-400 transition ${
-          selected ? "ring-2 ring-slate-400 ring-offset-2" : "hover:border-slate-400"
+        className={`group relative rounded-[10px] border border-dashed border-neutral-300 bg-neutral-50 px-3 py-2.5 text-neutral-400 ${
+          selected ? "ring-2 ring-neutral-400" : ""
         }`}
       >
-        <div className="mb-1 flex items-center justify-between">
-          <span className="flex items-center gap-1 text-[8.5px] font-bold uppercase tracking-wider">
-            <Archive className="size-3" /> Folded away
+        {handles}
+        <p className="mb-1 flex items-center justify-between text-[11px] font-medium">
+          <span className="flex items-center gap-1.5">
+            <Archive className="size-3.5" /> Folded away
           </span>
           <button
             onClick={(e) => {
               stop(e);
               dispatch({ type: "setFolded", id: node.id, folded: false });
             }}
-            className="nodrag rounded px-1.5 py-0.5 text-[9.5px] font-medium text-slate-500 hover:bg-slate-200"
+            className="nodrag rounded px-1 text-[10.5px] text-neutral-500 hover:bg-neutral-200"
           >
             Unfold
           </button>
-        </div>
-        <p className="line-clamp-2 text-[10.5px] leading-snug line-through decoration-slate-300">
-          {node.title}
         </p>
-        <Handle type="target" position={Position.Top} className="!opacity-0" />
-        <Handle type="source" position={Position.Bottom} className="!opacity-0" />
+        <p className="line-clamp-2 text-[12px] leading-snug line-through decoration-neutral-300">{node.title}</p>
       </div>
     );
-  }
 
-  // ── Main idea at the top ─────────────────────────────────────────────────
-  if (node.kind === "root") {
+  // ── the main idea ──
+  if (node.kind === "root")
     return (
       <div
-        style={{ width: NODE_WIDTH + 70 }}
-        className={`relative rounded-lg border border-slate-300 bg-slate-100 px-3.5 pb-3.5 pt-2.5 shadow-sm transition ${
-          selected ? "ring-2 ring-slate-500 ring-offset-2" : "hover:shadow-md"
+        style={{ width: ROOT_WIDTH }}
+        className={`group relative rounded-xl border bg-neutral-200/80 px-4 py-4 transition ${
+          selected ? "border-neutral-900 shadow-[0_0_0_1px_#171717]" : "border-neutral-300 hover:border-neutral-400"
         }`}
       >
-        <div className="mb-1.5 flex items-center justify-between gap-2">
-          <span className="text-[8.5px] font-semibold uppercase tracking-wider text-slate-500">
-            Paper hypothesis
-          </span>
-          <button
-            onClick={(e) => {
-              stop(e);
-              openPaperSearch(node.id);
-            }}
-            title="Search Semantic Scholar for papers"
-            className="nodrag flex size-5 items-center justify-center rounded-full bg-slate-400 text-white transition hover:bg-indigo-600"
-          >
-            <BookOpen className="size-3" />
-          </button>
-        </div>
-        <p className="text-[11.5px] font-semibold leading-snug text-slate-900">
-          {node.title}
-        </p>
-        <div className="mt-1.5">
-          <FieldChips node={node} />
-        </div>
+        {handles}
+        <p className="mb-2 text-[11px] font-medium text-neutral-500">Paper hypothesis</p>
+        <p className="line-clamp-7 text-[14px] font-semibold leading-[1.45] text-neutral-900">{node.title}</p>
+        <FieldLine node={node} className="mt-2" />
         {toggle}
       </div>
     );
-  }
 
-  // ── AI suggestion waiting for approval (dashed) ──────────────────────────
-  if (node.kind === "suggestion") {
+  // ── AI suggestion waiting for approval ──
+  if (node.kind === "suggestion")
     return (
       <div
-        style={{ width: NODE_WIDTH }}
-        className={`relative rounded-lg border-[1.5px] border-dashed border-sky-400 bg-sky-50/60 px-3 pb-2.5 pt-2.5 transition ${
-          selected ? "ring-2 ring-sky-500 ring-offset-2" : "hover:bg-sky-50"
+        style={{ width: NODE_WIDTH - 16 }}
+        className={`group relative rounded-[10px] border border-dashed border-neutral-400 bg-white/70 px-3 py-2.5 transition ${
+          selected ? "border-solid border-neutral-900 shadow-[0_0_0_1px_#171717]" : "hover:border-neutral-600"
         }`}
       >
-        <div className="mb-1.5 flex items-center justify-between">
-          <span className="flex items-center gap-1 text-[8.5px] font-bold uppercase tracking-wider text-sky-600">
-            <Sparkles className="size-3" /> AI suggestion
-          </span>
-          {node.lens && (
-            <span className="text-[8.5px] font-medium text-sky-500">{node.lens}</span>
-          )}
-        </div>
-        <p className="line-clamp-4 text-[10.5px] leading-snug text-slate-700">
-          {node.title}
+        {handles}
+        <p className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-neutral-600">
+          <Sparkles className="size-3.5" /> Suggested
         </p>
-        <div className="mt-2 flex gap-1.5">
+        <p className="line-clamp-2 text-[12px] leading-snug text-neutral-800">{node.title}</p>
+        <div className="mt-2 flex items-center gap-1.5">
           <button
             onClick={(e) => {
               stop(e);
               dispatch({ type: "approveSuggestion", id: node.id });
             }}
-            className="nodrag flex flex-1 items-center justify-center gap-1 rounded-md bg-sky-600 py-1 text-[10px] font-semibold text-white hover:bg-sky-700"
+            className="nodrag rounded-md bg-neutral-900 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-neutral-700"
           >
-            <Check className="size-3" /> Approve
+            Approve
           </button>
           <button
             onClick={(e) => {
               stop(e);
               dispatch({ type: "dismissSuggestion", id: node.id });
             }}
-            className="nodrag flex items-center justify-center rounded-md border border-sky-200 bg-white px-2 py-1 text-[10px] font-medium text-sky-700 hover:bg-sky-100"
-            title="Dismiss suggestion"
+            title="Dismiss"
+            className="nodrag flex size-[26px] items-center justify-center rounded-md border border-neutral-300 bg-white text-neutral-500 hover:text-neutral-900"
           >
             <X className="size-3" />
           </button>
         </div>
-        <Handle type="target" position={Position.Top} className="!opacity-0" />
-        <Handle type="source" position={Position.Bottom} className="!opacity-0" />
       </div>
     );
-  }
 
-  // ── Sub-hypothesis or experiment ─────────────────────────────────────────
+  // ── hypothesis / prediction / experiment ──
   const isExp = node.kind === "experiment";
-  const theme = isExp
-    ? {
-        border: "border-rose-400",
-        label: "text-rose-600",
-        icon: "bg-rose-300",
-        pencil: "bg-rose-600 hover:bg-rose-700",
-        ring: "ring-rose-500",
-      }
-    : {
-        border: "border-indigo-400",
-        label: "text-indigo-600",
-        icon: "bg-indigo-400",
-        pencil: "bg-indigo-700 hover:bg-indigo-800",
-        ring: "ring-indigo-500",
-      };
-  const Icon = isExp ? FlaskConical : depth <= 1 ? GitBranch : Search;
+  const isPrediction = !isExp && depth >= 2;
+  const outcome = node.status === "supported" || node.status === "contradicted" || node.status === "inconclusive" ? OUTCOME[node.status] : null;
+  const Icon = isExp ? FlaskConical : isPrediction ? CircleDot : Route;
+  const label = isExp ? "Experiment" : isPrediction ? "Prediction" : "Hypothesis";
+  const tint = outcome && (isPrediction || isExp || node.result) ? outcome.card : "border-neutral-300 bg-white";
 
   return (
     <div
-      style={{ width: NODE_WIDTH }}
-      className={`group relative rounded-lg border-[1.5px] bg-white px-3 pb-2.5 pt-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition ${theme.border} ${
-        selected ? `ring-2 ring-offset-2 ${theme.ring}` : "hover:shadow-md"
-      }`}
+      style={{ width: isExp ? NODE_WIDTH - 16 : NODE_WIDTH }}
+      className={`group relative rounded-[10px] border px-3 py-2.5 transition ${tint} ${
+        selected ? "!border-neutral-900 shadow-[0_0_0_1px_#171717]" : "hover:border-neutral-500"
+      } ${isExp && !outcome ? "bg-neutral-50" : ""}`}
     >
-      <div className="mb-1 flex items-center justify-between gap-2">
-        <span className="flex items-center gap-1.5">
-          <span
-            className={`text-[8.5px] font-bold uppercase tracking-wider ${theme.label}`}
-          >
-            {isExp ? "Experiment" : "Sub-hypothesis"}
+      {handles}
+      <div className="mb-1 flex items-center justify-between gap-2 text-[11px]">
+        <span className="flex items-center gap-1.5 font-medium text-neutral-600">
+          <Icon className="size-3.5" /> {label}
+        </span>
+        {isExp ? (
+          outcome ? (
+            <span className={`flex items-center gap-0.5 font-semibold ${outcome.text}`}>
+              <outcome.icon className="size-3" strokeWidth={2.5} /> {outcome.run}
+            </span>
+          ) : (
+            <span className="font-medium text-neutral-500">Planned</span>
+          )
+        ) : (
+          outcome && (
+            <span className={`flex items-center gap-0.5 font-semibold ${outcome.text}`}>
+              <outcome.icon className="size-3" strokeWidth={2.5} /> {outcome.label}
+            </span>
+          )
+        )}
+      </div>
+      <p className={`${isExp ? "line-clamp-2" : "line-clamp-3"} text-[12.5px] leading-snug text-neutral-800`}>{node.title}</p>
+      {!isExp && (
+        <p className="mt-1.5 flex flex-wrap items-center gap-x-1 text-[11px] text-neutral-500">
+          {node.confidence !== undefined && <b className="font-semibold text-neutral-800">{Math.round(node.confidence * 100)}%</b>}
+          {node.confidence !== undefined && <span>·</span>}
+          <span>
+            {node.evidence.length} paper{node.evidence.length === 1 ? "" : "s"}
           </span>
-          {isExp && node.status === "planned" && <StatusBadge status="planned" />}
-        </span>
-        <span
-          className={`flex size-5 items-center justify-center rounded-full text-white ${theme.icon}`}
-        >
-          <Icon className="size-3" />
-        </span>
-      </div>
-
-      <p
-        className={`text-[10.5px] leading-snug text-slate-700 ${
-          isExp ? "line-clamp-3" : "line-clamp-5"
-        }`}
-      >
-        {node.title}
-      </p>
-
-      <div className="mt-1.5 flex min-h-5 items-end justify-between">
-        <span className="flex flex-wrap items-center gap-1">
-          {node.status !== "untested" && node.status !== "planned" && (
-            <StatusBadge status={node.status} />
-          )}
-          {!isExp && <FieldChips node={node} />}
-        </span>
-        <button
-          onClick={(e) => {
-            stop(e);
-            openEditor({ mode: "edit", id: node.id });
-          }}
-          title="Edit"
-          className={`nodrag flex size-5 items-center justify-center rounded-full text-white transition ${theme.pencil}`}
-        >
-          <Pencil className="size-2.5" />
-        </button>
-      </div>
+          <FieldLine node={node} inline />
+        </p>
+      )}
       {toggle}
     </div>
   );
+}
+
+/** What the field says: how crowded, and new papers from this box's alert. */
+function FieldLine({ node, inline, className = "" }: { node: TreeNode; inline?: boolean; className?: string }) {
+  const fresh = unseenHits(node);
+  if (!node.fieldNovelty && !fresh) return null;
+  const body = (
+    <>
+      {node.fieldNovelty && (
+        <span
+          title={`Field map: ${node.fieldRelevant ?? "?"} of the 20 closest papers directly address this`}
+          className="text-neutral-400"
+        >
+          {inline && "· "}
+          {NOVELTY[node.fieldNovelty]}
+        </span>
+      )}
+      {fresh > 0 && (
+        <span
+          title="New papers matched this box's field alert"
+          className="ml-1 inline-flex items-center gap-0.5 rounded-full bg-neutral-900 px-1.5 text-[10px] font-semibold text-white"
+        >
+          <BellRing className="size-2.5" /> {fresh} new
+        </span>
+      )}
+    </>
+  );
+  return inline ? body : <p className={`text-[11px] ${className}`}>{body}</p>;
 }

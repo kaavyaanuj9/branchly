@@ -10,34 +10,28 @@ import {
   CircleHelp,
   LogOut,
   Lightbulb,
-  FlaskConical,
-  MessageSquare,
-  MessageSquareOff,
-  MousePointerClick,
-  Network,
   Plus,
-  Sparkles,
-  Upload,
 } from "lucide-react";
 import { getProject, listProjects, StoreProvider, useStore } from "@/lib/store";
 import { FieldSync } from "./FieldSync";
 import { IdeaStudio } from "./IdeaStudio";
+import { Wordmark } from "./BranchField";
 import { findNode } from "@/lib/tree";
 import { TreeCanvas } from "./TreeCanvas";
 import { FieldMapView } from "./FieldMapView";
 import { DetailPanel } from "./DetailPanel";
-import { ChatPanel } from "./ChatPanel";
 import { HelpModal, NodeEditorModal, UploadResultModal } from "./Modals";
 import { PaperSearchModal } from "./PaperSearchModal";
 import { DecomposeModal } from "./DecomposeModal";
 import { UIContext, type EditorRequest, type UIContextValue } from "./uiContext";
 
-// The whole HypoTree screen: header, toolbar, tree, detail panel and chat.
+// The whole Branchly screen: header, toolbar, tree, detail panel and chat.
 
 export interface SignedInUser {
   email: string;
   name: string;
   picture?: string;
+  lab?: string;
   demo?: boolean;
 }
 
@@ -143,104 +137,73 @@ function Workspace({ user, startInStudio }: { user: SignedInUser; startInStudio:
       </AnimatePresence>
       <div className="flex h-dvh flex-col bg-white text-slate-900">
         {/* Header */}
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200 px-5">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="flex items-center gap-2 font-semibold tracking-tight text-indigo-800">
-              <span className="flex size-7 items-center justify-center rounded-lg bg-indigo-700 text-white">
-                <Network className="size-4" />
-              </span>
-              HypoTree
-            </span>
-            <span className="h-5 w-px bg-slate-200" />
+        <header className="flex h-[60px] shrink-0 items-center justify-between gap-4 border-b border-neutral-200 bg-white px-6">
+          <div className="flex min-w-0 items-center gap-4">
+            <Wordmark className="text-[23px]" />
+            <span className="h-6 w-px bg-neutral-200" />
             <ProjectSwitcher />
-          </div>
-          <div className="flex items-center gap-4 text-sm text-slate-500">
-            <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-[13px]">
+            <div className="ml-2 hidden shrink-0 rounded-lg bg-neutral-100 p-0.5 text-[12.5px] md:flex">
               {(
                 [
-                  ["project", "Project tree"],
+                  ["project", "Tree"],
                   ["field", "Field map"],
                 ] as const
               ).map(([v, label]) => (
                 <button
                   key={v}
                   onClick={() => setView(v)}
-                  className={`rounded-md px-3 py-1 font-medium transition ${
-                    view === v ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"
+                  className={`whitespace-nowrap rounded-md px-2.5 py-1 font-medium transition ${
+                    view === v ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-800"
                   }`}
                 >
                   {label}
                 </button>
               ))}
             </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {view === "project" && counts.suggestions > 0 && (
+              <button
+                onClick={() => dispatch({ type: "select", id: state.nodes.find((n) => n.kind === "suggestion")?.id ?? null })}
+                title="AI suggestions waiting for your approval"
+                className="flex items-center gap-2 rounded-lg border border-neutral-300 bg-white px-3 py-[7px] text-[13px] font-medium text-neutral-800 transition hover:border-neutral-900"
+              >
+                <span className="size-1.5 rounded-full bg-neutral-900" /> {counts.suggestions} to review
+              </button>
+            )}
+            {view === "project" && (
+              <button
+                onClick={() => setPaperSearchFor(selected?.id || "root")}
+                className="flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-3 py-[7px] text-[13px] font-medium text-neutral-800 transition hover:border-neutral-900"
+              >
+                <BookOpen className="size-3.5" /> Search literature
+              </button>
+            )}
+            {view === "project" && (
+              <button
+                onClick={() => setEditor({ mode: "add", parentId: addParentId, kind: "hypothesis" })}
+                className="flex items-center gap-1.5 rounded-lg bg-neutral-900 px-3.5 py-[7px] text-[13px] font-semibold text-white transition hover:bg-neutral-700"
+              >
+                <Plus className="size-3.5" /> Add sub-hypothesis
+              </button>
+            )}
             <button
               onClick={() => setStudio(true)}
-              className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-emerald-600 px-3 py-1.5 text-[13px] font-semibold text-white shadow-sm transition hover:opacity-90"
               title="Start from a new idea"
+              className="flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-3 py-[7px] text-[13px] font-medium text-neutral-800 transition hover:border-neutral-900"
             >
               <Lightbulb className="size-3.5" /> New idea
             </button>
             <button
               onClick={() => setHelpOpen(true)}
-              className="rounded-full p-1 transition hover:bg-slate-100 hover:text-slate-900"
-              title="How HypoTree works"
+              className="rounded-full p-1.5 text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900"
+              title="How Branchly works"
             >
-              <CircleHelp className="size-5" />
+              <CircleHelp className="size-[18px]" />
             </button>
             <UserChip user={user} />
           </div>
         </header>
-
-        {/* Toolbar (project tree only; the field map has its own search) */}
-        <div
-          className={`${view === "field" ? "hidden" : "flex"} shrink-0 flex-wrap items-center gap-2 border-b border-slate-200 px-5 py-2.5`}
-        >
-          <button
-            onClick={() => setEditor({ mode: "add", parentId: addParentId, kind: "hypothesis" })}
-            className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-[13px] font-medium text-white shadow-sm transition hover:bg-slate-800"
-          >
-            <Plus className="size-3.5" /> Add Sub-Hypothesis
-          </button>
-          <button
-            onClick={() => setChatOpen(!chatOpen)}
-            className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-[13px] font-medium text-white shadow-sm transition hover:bg-slate-800"
-          >
-            {chatOpen ? <MessageSquareOff className="size-3.5" /> : <MessageSquare className="size-3.5" />}
-            {chatOpen ? "Hide Chat" : "Show Chat"}
-          </button>
-          <button
-            onClick={() => setPaperSearchFor(selected?.id || "root")}
-            className="flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50/70 px-3 py-1.5 text-[13px] font-medium text-indigo-700 shadow-sm transition hover:bg-indigo-100"
-          >
-            <BookOpen className="size-3.5" /> Search Literature
-          </button>
-          {selected && selected.kind !== "experiment" && !selected.folded && (
-            <button
-              onClick={() => setDecomposeFor(selected.id)}
-              className="flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50/70 px-3 py-1.5 text-[13px] font-medium text-purple-700 shadow-sm transition hover:bg-purple-100"
-            >
-              <Sparkles className="size-3.5" /> Break Down (Claude)
-            </button>
-          )}
-          {selected?.kind === "experiment" && (
-            <button
-              onClick={() => setUploadFor(selected.id)}
-              className="flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-[13px] font-medium text-rose-700 transition hover:bg-rose-100"
-            >
-              <Upload className="size-3.5" /> Upload Result
-            </button>
-          )}
-
-          <div className="ml-auto hidden items-center gap-4 text-[12px] text-slate-500 lg:flex">
-            <Stat n={counts.ideas} label="ideas" />
-            <Stat n={counts.experiments} label="experiments" />
-            <Stat n={counts.supported} label="supported" dot="bg-emerald-500" />
-            <Stat n={counts.contradicted} label="contradicted" dot="bg-rose-500" />
-            {counts.suggestions > 0 && (
-              <Stat n={counts.suggestions} label="awaiting approval" dot="bg-sky-500" />
-            )}
-          </div>
-        </div>
 
         {/* Workspace */}
         {view === "field" ? (
@@ -249,18 +212,10 @@ function Workspace({ user, startInStudio }: { user: SignedInUser; startInStudio:
           </main>
         ) : (
         <main className="flex min-h-0 flex-1">
-          <div className="relative min-w-0 flex-1 bg-[#fafbfc]">
+          <div className="relative min-w-0 flex-1 bg-[#f6f6f4]">
             <TreeCanvas />
-            <Legend />
-            {!selected && (
-              <div className="pointer-events-none absolute left-1/2 top-4 flex -translate-x-1/2 items-center gap-2 rounded-full border border-slate-200 bg-white/90 px-4 py-1.5 text-[12.5px] text-slate-500 shadow-sm backdrop-blur">
-                <MousePointerClick className="size-3.5" />
-                Click any box to see its details and talk to its AI assistant
-              </div>
-            )}
           </div>
           {selected && <DetailPanel key={`d-${selected.id}`} node={selected} />}
-          {selected && chatOpen && <ChatPanel key={`c-${selected.id}`} node={selected} />}
         </main>
         )}
       </div>
@@ -278,46 +233,8 @@ function Workspace({ user, startInStudio }: { user: SignedInUser; startInStudio:
   );
 }
 
-function Stat({ n, label, dot }: { n: number; label: string; dot?: string }) {
-  return (
-    <span className="flex items-center gap-1.5">
-      {dot && <span className={`size-1.5 rounded-full ${dot}`} />}
-      <b className="font-semibold tabular-nums text-slate-800">{n}</b> {label}
-    </span>
-  );
-}
 
-function Legend() {
-  return (
-    <div className="absolute left-4 top-4 z-10 hidden space-y-1.5 rounded-xl border border-slate-200 bg-white/90 px-3.5 py-3 text-[11.5px] text-slate-600 shadow-sm backdrop-blur md:block">
-      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Legend</p>
-      <LegendRow swatch="border-[1.5px] border-indigo-400 bg-white">Idea</LegendRow>
-      <LegendRow swatch="border-[1.5px] border-rose-400 bg-white">
-        <span className="flex items-center gap-1">
-          Experiment <FlaskConical className="size-3 text-rose-400" />
-        </span>
-      </LegendRow>
-      <LegendRow swatch="border-[1.5px] border-dashed border-sky-400 bg-sky-50">AI suggestion</LegendRow>
-      <LegendRow swatch="border border-dashed border-slate-300 bg-slate-50">Folded away</LegendRow>
-      <div className="flex items-center gap-2 pt-1">
-        <span className="flex w-5 flex-col gap-0.5">
-          <span className="h-px bg-indigo-300" />
-          <span className="h-[3px] bg-indigo-400" />
-        </span>
-        Thicker = more confident
-      </div>
-    </div>
-  );
-}
 
-function LegendRow({ swatch, children }: { swatch: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className={`h-3 w-5 rounded-[3px] ${swatch}`} />
-      {children}
-    </div>
-  );
-}
 
 /** The project title, which opens the list of projects kept in this browser. */
 function ProjectSwitcher() {
@@ -325,7 +242,7 @@ function ProjectSwitcher() {
   const [open, setOpen] = useState(false);
   const [projects, setProjects] = useState<{ id: string; title: string; updated: number }[]>([]);
   return (
-    <div className="relative min-w-0">
+    <div className="relative min-w-0 max-w-[min(420px,32vw)]">
       <button
         onClick={() => {
           setProjects(listProjects());
@@ -334,8 +251,8 @@ function ProjectSwitcher() {
         title="Switch project"
         className="flex min-w-0 items-center gap-1 rounded-md px-1.5 py-1 hover:bg-slate-100"
       >
-        <h1 className="truncate text-[15px] font-semibold text-slate-900">{state.title}</h1>
-        <ChevronsUpDown className="size-3.5 shrink-0 text-slate-400" />
+        <h1 className="truncate text-[14.5px] text-neutral-600">{state.title}</h1>
+        <ChevronsUpDown className="size-3.5 shrink-0 text-neutral-400" />
       </button>
       {open && (
         <div className="absolute left-0 top-10 z-50 w-[420px] max-w-[90vw] rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg">
