@@ -29,7 +29,7 @@ export type HypoFlowNode = Node<
 export function HypoNode({ data, selected }: NodeProps<HypoFlowNode>) {
   const { node, depth, childCount, hiddenCount } = data;
   const { dispatch } = useStore();
-  const { openEditor } = useUI();
+  const { openEditor, openPaperSearch } = useUI();
 
   const stop = (e: React.MouseEvent) => e.stopPropagation();
 
@@ -99,11 +99,18 @@ export function HypoNode({ data, selected }: NodeProps<HypoFlowNode>) {
       >
         <div className="mb-1.5 flex items-center justify-between gap-2">
           <span className="text-[8.5px] font-semibold uppercase tracking-wider text-slate-500">
-            Paper hypothesis · click to open literature
+            Paper hypothesis
           </span>
-          <span className="flex size-5 items-center justify-center rounded-full bg-slate-400 text-white">
+          <button
+            onClick={(e) => {
+              stop(e);
+              openPaperSearch(node.id);
+            }}
+            title="Search Semantic Scholar for papers"
+            className="nodrag flex size-5 items-center justify-center rounded-full bg-slate-400 text-white transition hover:bg-indigo-600"
+          >
             <BookOpen className="size-3" />
-          </span>
+          </button>
         </div>
         <p className="text-[11.5px] font-semibold leading-snug text-slate-900">
           {node.title}

@@ -25,7 +25,7 @@ export function ChatPanel({ node }: { node: TreeNode }) {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages.length, typing, node.id]);
 
-  function send(text: string) {
+  async function send(text: string) {
     const question = text.trim();
     if (!question || typingFor) return;
     const nodeId = node.id;
@@ -37,22 +37,35 @@ export function ChatPanel({ node }: { node: TreeNode }) {
     setDraft("");
     setTypingFor(nodeId);
 
-    // Pretend to "think" for a moment, like a real AI would.
-    const reply = getAgentReply(question, node, {
-      parent: findNode(state.nodes, node.parentId),
-      children: childrenOf(state.nodes, node.id),
-    });
-    setTimeout(
-      () => {
-        dispatch({
-          type: "addMessage",
-          nodeId,
-          message: { id: newId(), role: "agent", ...reply },
-        });
-        setTypingFor(null);
-      },
-      700 + (question.length % 6) * 120,
-    );
+    try {
+      const reply = await getAgentReply(
+        question,
+        node,
+        {
+          parent: findNode(state.nodes, node.parentId),
+          children: childrenOf(state.nodes, node.id),
+        },
+        messages,
+      );
+      dispatch({
+        type: "addMessage",
+        nodeId,
+        message: { id: newId(), role: "agent", ...reply },
+      });
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      dispatch({
+        type: "addMessage",
+        nodeId,
+        message: {
+          id: newId(),
+          role: "agent",
+          text: `⚠️ **Claude API Error**:\n${errorMsg}\n\nEnsure \`ANTHROPIC_API_KEY\` is set in your \`.env.local\` file and restart the server.`,
+        },
+      });
+    } finally {
+      setTypingFor(null);
+    }
   }
 
   function acceptProposal(m: ChatMessage) {
@@ -92,9 +105,14 @@ export function ChatPanel({ node }: { node: TreeNode }) {
             <Bot className="size-4.5" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-indigo-700">
-              {agentLabel(node)}
-            </p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-indigo-700">
+                {agentLabel(node)}
+              </p>
+              <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-[9px] font-semibold text-indigo-600">
+                Claude Sonnet 5.5
+              </span>
+            </div>
             <p className="text-[11.5px] text-slate-400">Agent for:</p>
             <p className="line-clamp-2 text-[14px] font-semibold leading-snug text-slate-900">
               {node.title}

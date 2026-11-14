@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
 import {
+  BookOpen,
   CircleHelp,
   FlaskConical,
   MessageSquare,
@@ -10,6 +11,7 @@ import {
   MousePointerClick,
   Network,
   Plus,
+  Sparkles,
   Upload,
 } from "lucide-react";
 import { StoreProvider, useStore } from "@/lib/store";
@@ -18,6 +20,8 @@ import { TreeCanvas } from "./TreeCanvas";
 import { DetailPanel } from "./DetailPanel";
 import { ChatPanel } from "./ChatPanel";
 import { HelpModal, NodeEditorModal, UploadResultModal } from "./Modals";
+import { PaperSearchModal } from "./PaperSearchModal";
+import { DecomposeModal } from "./DecomposeModal";
 import { UIContext, type EditorRequest, type UIContextValue } from "./uiContext";
 
 // The whole HypoTree screen: header, toolbar, tree, detail panel and chat.
@@ -37,24 +41,40 @@ function Workspace() {
   const [chatOpen, setChatOpen] = useState(true);
   const [editor, setEditor] = useState<EditorRequest | null>(null);
   const [uploadFor, setUploadFor] = useState<string | null>(null);
+  const [paperSearchFor, setPaperSearchFor] = useState<string | null>(null);
+  const [decomposeFor, setDecomposeFor] = useState<string | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
 
   const selected = findNode(state.nodes, state.selectedId);
 
   const ui: UIContextValue = useMemo(
-    () => ({ chatOpen, setChatOpen, openEditor: setEditor, openUpload: setUploadFor }),
-    [chatOpen],
+    () => ({
+      chatOpen,
+      setChatOpen,
+      openEditor: setEditor,
+      openUpload: setUploadFor,
+      openPaperSearch: (id) => setPaperSearchFor(id || state.selectedId || "root"),
+      openDecompose: (id) => setDecomposeFor(id),
+    }),
+    [chatOpen, state.selectedId],
   );
 
-  // Esc closes the side panels.
+  // Esc closes the side panels and modals.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !editor && !uploadFor && !helpOpen)
+      if (
+        e.key === "Escape" &&
+        !editor &&
+        !uploadFor &&
+        !helpOpen &&
+        !paperSearchFor &&
+        !decomposeFor
+      )
         dispatch({ type: "select", id: null });
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [dispatch, editor, uploadFor, helpOpen]);
+  }, [dispatch, editor, uploadFor, helpOpen, paperSearchFor, decomposeFor]);
 
   // "Add Sub-Hypothesis" goes under the selected idea, or under the main idea.
   const addParentId =
@@ -117,6 +137,20 @@ function Workspace() {
             {chatOpen ? <MessageSquareOff className="size-3.5" /> : <MessageSquare className="size-3.5" />}
             {chatOpen ? "Hide Chat" : "Show Chat"}
           </button>
+          <button
+            onClick={() => setPaperSearchFor(selected?.id || "root")}
+            className="flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50/70 px-3 py-1.5 text-[13px] font-medium text-indigo-700 shadow-sm transition hover:bg-indigo-100"
+          >
+            <BookOpen className="size-3.5" /> Search Literature
+          </button>
+          {selected && selected.kind !== "experiment" && !selected.folded && (
+            <button
+              onClick={() => setDecomposeFor(selected.id)}
+              className="flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50/70 px-3 py-1.5 text-[13px] font-medium text-purple-700 shadow-sm transition hover:bg-purple-100"
+            >
+              <Sparkles className="size-3.5" /> Break Down (Claude)
+            </button>
+          )}
           {selected?.kind === "experiment" && (
             <button
               onClick={() => setUploadFor(selected.id)}
@@ -156,6 +190,12 @@ function Workspace() {
 
       {editor && <NodeEditorModal request={editor} onClose={() => setEditor(null)} />}
       {uploadFor && <UploadResultModal experimentId={uploadFor} onClose={() => setUploadFor(null)} />}
+      {paperSearchFor && (
+        <PaperSearchModal nodeId={paperSearchFor} onClose={() => setPaperSearchFor(null)} />
+      )}
+      {decomposeFor && (
+        <DecomposeModal nodeId={decomposeFor} onClose={() => setDecomposeFor(null)} />
+      )}
       {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
     </UIContext.Provider>
   );

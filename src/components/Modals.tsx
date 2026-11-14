@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, FlaskConical, GitBranch, Trash2, Upload, X } from "lucide-react";
+import { AlertCircle, FileText, FlaskConical, GitBranch, Loader2, Trash2, Upload, X } from "lucide-react";
 import { newId, useStore } from "@/lib/store";
 import { findNode } from "@/lib/tree";
 import type { ExperimentResult, TreeNode } from "@/lib/types";
-import { interpretResult, suggestAlternatives } from "@/lib/mockAgent";
+import { interpretResultWithAI } from "@/lib/mockAgent";
 import type { EditorRequest } from "./uiContext";
 
 // Pop-up windows: add/edit a box, upload a result, and the help guide.
@@ -279,30 +279,50 @@ export function UploadResultModal({ experimentId, onClose }: { experimentId: str
   const [notes, setNotes] = useState(exp?.result?.notes ?? "");
   const [files, setFiles] = useState<string[]>(exp?.result?.files ?? []);
   const [outcome, setOutcome] = useState<ExperimentResult["outcome"] | null>(exp?.result?.outcome ?? null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (!exp) return null;
   const hypothesis = findNode(state.nodes, exp.parentId) ?? exp;
 
-  function submit() {
+  async function submit() {
     if (!exp || !notes.trim() || !outcome) return;
-    const suggestions: TreeNode[] =
-      outcome === "contradicted"
-        ? suggestAlternatives(hypothesis, exp).map((s) => ({ ...s, id: newId(), parentId: exp.id }))
-        : [];
-    dispatch({
-      type: "recordResult",
-      id: exp.id,
-      suggestions,
-      result: {
-        notes: notes.trim(),
-        files,
+    setLoading(true);
+    setError(null);
+
+    try {
+      const { interpretation, suggestions } = await interpretResultWithAI(
+        exp,
+        hypothesis,
+        notes.trim(),
         outcome,
-        interpretation: interpretResult(exp, outcome),
-        recordedAt: new Date().toISOString().slice(0, 10),
-      },
-    });
-    dispatch({ type: "select", id: exp.id });
-    onClose();
+      );
+
+      const treeSuggestions: TreeNode[] = suggestions.map((s) => ({
+        ...s,
+        id: newId(),
+        parentId: exp.id,
+      }));
+
+      dispatch({
+        type: "recordResult",
+        id: exp.id,
+        suggestions: treeSuggestions,
+        result: {
+          notes: notes.trim(),
+          files,
+          outcome,
+          interpretation,
+          recordedAt: new Date().toISOString().slice(0, 10),
+        },
+      });
+      dispatch({ type: "select", id: exp.id });
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -384,20 +404,35 @@ export function UploadResultModal({ experimentId, onClose }: { experimentId: str
         </Field>
         {outcome === "contradicted" && (
           <p className="text-[12.5px] text-sky-700">
-            The AI will suggest three new ideas to explain this. You choose which one (if any) to test next.
+            Claude Sonnet 5.5 will formulate three new counter-hypotheses with follow-up experiments to explain this anomaly.
           </p>
         )}
 
+        {error && (
+          <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+            <AlertCircle className="mt-0.5 size-4 shrink-0 text-rose-600" />
+            <div>
+              <p className="font-semibold">Interpretation Error</p>
+              <p>{error}</p>
+            </div>
+          </div>
+        )}
+
         <div className="flex justify-end gap-2 pt-1">
-          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">
+          <button
+            onClick={onClose}
+            disabled={loading}
+            className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+          >
             Cancel
           </button>
           <button
             onClick={submit}
-            disabled={!notes.trim() || !outcome}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300"
+            disabled={!notes.trim() || !outcome || loading}
+            className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300"
           >
-            Save &amp; ask AI to interpret
+            {loading ? <Loader2 className="size-4 animate-spin" /> : null}
+            {loading ? "Claude is analyzing…" : "Save & ask Claude to interpret"}
           </button>
         </div>
       </div>
@@ -440,9 +475,8 @@ export function HelpModal({ onClose }: { onClose: () => void }) {
             <li>• Click any box for details. &ldquo;Discuss with AI&rdquo; opens that box&rsquo;s own assistant.</li>
             <li>• Scroll to zoom, drag the background to move around. Press Esc to close panels.</li>
           </ul>
-          <p className="pt-1 text-slate-400">
-            You stay in control: nothing changes in the tree without your approval. AI replies are
-            simulated in this version.
+          <p className="pt-1 text-slate-500">
+            Literature searching is connected to the <b>Semantic Scholar API</b>. Reasoning, hypothesis decomposition, and result interpretation are powered by <b>Claude Sonnet 5.5</b>.
           </p>
         </div>
 

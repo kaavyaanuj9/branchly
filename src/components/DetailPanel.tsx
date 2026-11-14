@@ -3,14 +3,18 @@
 import {
   Archive,
   ArchiveRestore,
+  BookOpen,
   Check,
+  ExternalLink,
   FileText,
   FlaskConical,
   Layers,
   MessageSquare,
   Pencil,
   Plus,
+  Search,
   Sparkles,
+  Trash2,
   Upload,
   X,
 } from "lucide-react";
@@ -43,7 +47,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export function DetailPanel({ node }: { node: TreeNode }) {
   const { state, dispatch } = useStore();
-  const { openEditor, openUpload, chatOpen, setChatOpen } = useUI();
+  const { openEditor, openUpload, chatOpen, setChatOpen, openPaperSearch, openDecompose } = useUI();
 
   const parent = findNode(state.nodes, node.parentId);
   const kids = childrenOf(state.nodes, node.id);
@@ -97,11 +101,19 @@ export function DetailPanel({ node }: { node: TreeNode }) {
                 <Pencil className="size-3" /> Edit
               </SmallButton>
               {!isExp && (
-                <SmallButton
-                  onClick={() => openEditor({ mode: "add", parentId: node.id, kind: "hypothesis" })}
-                >
-                  <Plus className="size-3" /> Sub-hypothesis
-                </SmallButton>
+                <>
+                  <SmallButton
+                    onClick={() => openEditor({ mode: "add", parentId: node.id, kind: "hypothesis" })}
+                  >
+                    <Plus className="size-3" /> Sub-hypothesis
+                  </SmallButton>
+                  <SmallButton onClick={() => openPaperSearch(node.id)}>
+                    <BookOpen className="size-3 text-indigo-600" /> Search Papers
+                  </SmallButton>
+                  <SmallButton onClick={() => openDecompose(node.id)}>
+                    <Sparkles className="size-3 text-purple-600" /> Break down with Claude
+                  </SmallButton>
+                </>
               )}
               {node.kind === "hypothesis" && (
                 <SmallButton
@@ -305,21 +317,48 @@ export function DetailPanel({ node }: { node: TreeNode }) {
           </Section>
         )}
 
-        {node.evidence.length > 0 && (
-          <Section title={node.kind === "root" ? "Literature" : "Supporting evidence"}>
-            <ul className="space-y-2.5">
-              {node.evidence.map((e, i) => (
-                <li key={i} className="flex gap-2.5 text-[14px] leading-relaxed text-slate-600">
-                  <span className="mt-2 size-1.5 shrink-0 rounded-full bg-slate-400" />
-                  <span>
-                    {e.text}{" "}
-                    <span className="whitespace-nowrap text-slate-400">({e.citation})</span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </Section>
-        )}
+        <Section title={node.kind === "root" ? "Literature" : "Supporting evidence"}>
+          <div className="space-y-2">
+            {node.evidence.map((e, i) => (
+              <div
+                key={i}
+                className="group relative flex items-start justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/70 p-2.5 text-[13px] leading-relaxed text-slate-700"
+              >
+                <div className="space-y-1">
+                  <p>{e.text}</p>
+                  <p className="text-xs text-slate-500">
+                    {e.url ? (
+                      <a
+                        href={e.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 font-medium text-indigo-700 hover:underline"
+                      >
+                        {e.citation}
+                        <ExternalLink className="size-3" />
+                      </a>
+                    ) : (
+                      <span>({e.citation})</span>
+                    )}
+                  </p>
+                </div>
+                <button
+                  onClick={() => dispatch({ type: "removeEvidence", id: node.id, index: i })}
+                  title="Remove this evidence"
+                  className="rounded p-1 text-slate-400 opacity-0 transition hover:bg-slate-200 hover:text-rose-600 group-hover:opacity-100"
+                >
+                  <Trash2 className="size-3.5" />
+                </button>
+              </div>
+            ))}
+            <button
+              onClick={() => openPaperSearch(node.id)}
+              className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-200 bg-white py-2 text-xs font-medium text-slate-600 transition hover:border-indigo-300 hover:bg-indigo-50/40 hover:text-indigo-700"
+            >
+              <Search className="size-3" /> Search Semantic Scholar for papers
+            </button>
+          </div>
+        </Section>
 
         {subHypotheses.length > 0 && (
           <Section title="Sub-hypotheses">

@@ -7,7 +7,7 @@ import {
   useReducer,
   type ReactNode,
 } from "react";
-import type { ChatMessage, ExperimentResult, TreeNode } from "./types";
+import type { ChatMessage, Evidence, ExperimentResult, TreeNode } from "./types";
 import { sampleProject } from "./sampleData";
 import { descendantIds, findNode } from "./tree";
 
@@ -58,7 +58,9 @@ type Action =
       nodeId: string;
       messageId: string;
       patch: Partial<ChatMessage>;
-    };
+    }
+  | { type: "addEvidence"; id: string; evidence: Evidence }
+  | { type: "removeEvidence"; id: string; index: number };
 
 export const newId = () =>
   Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
@@ -233,6 +235,28 @@ function reducer(state: AppState, action: Action): AppState {
           ),
         },
       };
+
+    case "addEvidence": {
+      const target = findNode(state.nodes, action.id);
+      if (!target) return state;
+      return {
+        ...state,
+        nodes: patchNode(state.nodes, action.id, {
+          evidence: [...target.evidence, action.evidence],
+        }),
+      };
+    }
+
+    case "removeEvidence": {
+      const target = findNode(state.nodes, action.id);
+      if (!target) return state;
+      return {
+        ...state,
+        nodes: patchNode(state.nodes, action.id, {
+          evidence: target.evidence.filter((_, idx) => idx !== action.index),
+        }),
+      };
+    }
   }
 }
 

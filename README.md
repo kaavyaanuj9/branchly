@@ -1,31 +1,86 @@
 # HypoTree
 
-A tree-shaped workspace where a scientist and AI assistants test a hypothesis together.
-This is the front end only. AI replies are **simulated** (no paid APIs yet).
+A tree-shaped workspace where scientists and AI assistants test hypotheses together.
 
-## Run it
+Powered by:
+- **Claude Sonnet 5.5** via the Anthropic API for real-time scientific reasoning, hypothesis decomposition, experimental protocol critique, and result interpretation.
+- **Semantic Scholar API** for live research paper retrieval, citation tracking, and literature-backed evidence linking.
+
+---
+
+## 🔑 Configure API Keys
+
+1. Copy `.env.example` to `.env.local` (or edit the created `.env.local` file):
+   ```bash
+   cp .env.example .env.local
+   ```
+
+2. Add your keys in `.env.local`:
+   ```bash
+   # Required: Anthropic API Key for Claude Sonnet 5.5
+   ANTHROPIC_API_KEY=sk-ant-api03-...
+
+   # Optional (defaults to claude-sonnet-5.5)
+   ANTHROPIC_MODEL=claude-sonnet-5.5
+
+   # Recommended: Semantic Scholar API Key for literature searching
+   SEMANTIC_SCHOLAR_API_KEY=your_key_here
+   ```
+   - **Anthropic Key**: Get one at [console.anthropic.com](https://console.anthropic.com/).
+   - **Semantic Scholar Key**: Request one at [semanticscholar.org/product/api](https://www.semanticscholar.org/product/api#api-key-form) for high rate limits (unauthenticated public requests have strict rate limits).
+
+---
+
+## 🚀 Run it
 
 ```bash
-cd hypotree-app
 npm run dev
 ```
 
-Then open http://localhost:3000. Stop the server with `Ctrl + C`.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-## Where things live
+---
+
+## 🔬 Key Features
+
+1. **Semantic Scholar Literature Search**:
+   - Click **Search Literature** in the toolbar or **Search Semantic Scholar for papers** in any node's Evidence panel.
+   - Read abstracts, TLDRs, citation counts, and click direct paper links.
+   - Click **Add to Evidence** to link the publication directly to your hypothesis.
+   - Click **Analyze with Claude** to assess whether the paper supports or challenges the claim.
+
+2. **Claude Sonnet 5.5 AI Co-Investigators**:
+   - Each node has a dedicated agent (Literature Agent, Validator Agent, Experiment Agent, Explorer Agent).
+   - Chat in real-time about protocols, controls, and boundary conditions.
+   - Claude generates structured proposal cards (**Approve & add to tree**) that insert sub-hypotheses or experiments directly into the canvas.
+
+3. **Break Down with Claude**:
+   - Select any hypothesis and click **Break Down (Claude)** in the toolbar or detail panel.
+   - Claude formulates 3 testable sub-claims and experiments through different scientific lenses (*"What must be true"*, *"When might it not hold"*, *"Direct mechanism"*).
+
+4. **Experiment Result Interpretation**:
+   - Upload experimental findings and designate the outcome (*As expected*, *Unexpected / Contradicted*, *Unclear*).
+   - Claude interprets the results against prior expectations.
+   - If contradicted, Claude formulates 3 distinct, creative alternative hypotheses with follow-up experiments to explain the unexpected finding.
+
+---
+
+## 📁 Where things live
 
 | File | What it does |
 | --- | --- |
-| `src/lib/sampleData.ts` | The sample Venetoclax / BCL-2 hypotheses. Edit this to change the starting tree. |
-| `src/lib/types.ts` | The shape of a box (idea, experiment, suggestion) and chat messages. |
-| `src/lib/store.tsx` | All app data and the actions that change it; saves to your browser. |
-| `src/lib/mockAgent.ts` | The pretend AI. Replace these functions with real AI calls later. |
-| `src/lib/tree.ts` | Tree helpers and the layout that positions the boxes. |
-| `src/components/HypoTreeApp.tsx` | The full screen: header, toolbar, canvas, panels. |
-| `src/components/TreeCanvas.tsx` | The zoomable tree (React Flow). |
-| `src/components/HypoNode.tsx` | How each box looks. |
-| `src/components/DetailPanel.tsx` | The middle panel with a box's details. |
-| `src/components/ChatPanel.tsx` | The per-box AI assistant. |
-| `src/components/Modals.tsx` | Pop-ups: add/edit, upload results, help. |
-
-To start over with the sample data, open the **?** help menu and click **Reset demo project**.
+| `src/lib/claude.ts` | Server-side Claude Sonnet 5.5 client, prompt engineering, and proposal parsing. |
+| `src/lib/semanticScholar.ts` | Semantic Scholar Academic Graph API search and citation formatting. |
+| `src/app/api/chat/route.ts` | Route handler for node-scoped Claude conversation. |
+| `src/app/api/interpret-result/route.ts` | Route handler for Claude experimental result interpretation & alternative generation. |
+| `src/app/api/decompose/route.ts` | Route handler for Claude hypothesis decomposition. |
+| `src/app/api/papers/search/route.ts` | Route handler querying Semantic Scholar API. |
+| `src/app/api/papers/analyze/route.ts` | Route handler using Claude to evaluate literature impact. |
+| `src/components/PaperSearchModal.tsx` | Research paper search modal with direct evidence linking & AI analysis. |
+| `src/components/DecomposeModal.tsx` | Claude hypothesis decomposition modal. |
+| `src/components/HypoTreeApp.tsx` | Full-screen app layout, header, toolbar, canvas, and panels. |
+| `src/components/TreeCanvas.tsx` | Interactive React Flow canvas with confidence-weighted edges. |
+| `src/components/DetailPanel.tsx` | Selected node inspection, protocols, results, and evidence curation. |
+| `src/components/ChatPanel.tsx` | Per-node conversational co-investigator with Claude Sonnet 5.5. |
+| `src/lib/store.tsx` | Unified React store and `localStorage` persistence. |
+| `src/lib/types.ts` | TypeScript types for tree nodes, evidence, papers, and proposals. |

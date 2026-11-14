@@ -20,6 +20,24 @@ export type Status =
 export interface Evidence {
   text: string;
   citation: string;
+  url?: string;
+  year?: number;
+  paperId?: string;
+  tldr?: string;
+}
+
+/** A paper returned from the Semantic Scholar API. */
+export interface SemanticScholarPaper {
+  paperId: string;
+  title: string;
+  abstract?: string | null;
+  year?: number | null;
+  venue?: string | null;
+  url?: string | null;
+  citationCount?: number | null;
+  authors: { authorId?: string; name: string }[];
+  tldr?: { model?: string; text: string } | null;
+  openAccessPdf?: { url: string; status: string } | null;
 }
 
 /** A result the scientist uploaded for an experiment. */

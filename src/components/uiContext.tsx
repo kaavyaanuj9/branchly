@@ -13,6 +13,8 @@ export interface UIContextValue {
   setChatOpen: (open: boolean) => void;
   openEditor: (req: EditorRequest) => void;
   openUpload: (experimentId: string) => void;
+  openPaperSearch: (nodeId?: string) => void;
+  openDecompose: (nodeId: string) => void;
 }
 
 export const UIContext = createContext<UIContextValue | null>(null);
