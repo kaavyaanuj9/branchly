@@ -142,7 +142,7 @@ function Workspace({ user, startInStudio }: { user: SignedInUser; startInStudio:
             <Wordmark className="text-[23px]" />
             <span className="h-6 w-px bg-neutral-200" />
             <ProjectSwitcher />
-            <div className="ml-2 hidden shrink-0 rounded-lg bg-neutral-100 p-0.5 text-[12.5px] md:flex">
+            <div className="ml-2 flex shrink-0 rounded-lg bg-neutral-100 p-0.5 text-[12.5px]">
               {(
                 [
                   ["project", "Tree"],
