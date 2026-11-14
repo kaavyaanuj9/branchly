@@ -78,7 +78,7 @@ def _out(obj):
 
 @server.tool(annotations=READ)
 def tree_overview() -> str:
-    """The 13 top-level branches of LLM-agent research with paper counts, papers added this week,
+    """The top-level branches of this field with paper counts, papers added this week,
     momentum (recent share vs the field; >1.5 means heating up), and each branch's fastest-growing
     topics with their node ids. Start here to orient."""
     tree = _call("/api/tree")
