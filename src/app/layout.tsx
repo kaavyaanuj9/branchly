@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "HypoTree",
-  description: "Scientists and AI working together to test a hypothesis",
+  title: "Branchly",
+  description: "Facilitate academic collaboration with agents",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

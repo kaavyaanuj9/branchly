@@ -1,4 +1,4 @@
-# HypoTree
+# Branchly
 
 A tree-shaped workspace where scientists and AI assistants test hypotheses together.
 
@@ -67,9 +67,9 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## 🌳 Research Tree: the field around your hypothesis
 
-HypoTree is project scale: one team testing one idea. **Research Tree** (`research-tree/`) is field
+Branchly is project scale: one team testing one idea. **Research Tree** (`research-tree/`) is field
 scale: a live map of what every lab is publishing, who builds on whom, and which directions are
-crowded or open. It runs as its own service, and HypoTree uses it as its literature layer.
+crowded or open. It runs as its own service, and Branchly uses it as its literature layer.
 
 - **In the field** panel on every box:
   - **Where it sits:** the box's place on the field map, how crowded it is, and the closest papers
@@ -87,7 +87,7 @@ topics) and places your project's ideas on it (blue badges). Click any topic to 
 papers and add them to the selected box's evidence, plus the neighbouring topics in other branches
 and the most built-on papers. **Show on the field map** in a box's panel jumps to its spot.
 
-Run everything with one command (the field map's Python backend plus HypoTree):
+Run everything with one command (the field map's Python backend plus Branchly):
 
 ```bash
 npm run dev:all       # RT_FIELD=cell_death by default; RT_PYTHON=path/to/python if needed
@@ -98,7 +98,7 @@ Or start the backend on its own: `cd research-tree && RT_FIELD=cell_death python
 (cancer & cell biology), `llm_agents`.
 
 First-time build of its data: see `research-tree/README.md` ("Fields"). Set `RESEARCH_TREE_URL` in
-`.env.local` if it runs elsewhere. Without it, HypoTree still works; the panel says the map is unreachable.
+`.env.local` if it runs elsewhere. Without it, Branchly still works; the panel says the map is unreachable.
 
 ## 🤖 AI backend: API key or your Claude Code login
 
@@ -121,7 +121,7 @@ Force one with `AI_BACKEND=api` or `AI_BACKEND=claude-code`.
 | `src/app/api/field/[action]/route.ts` | Server routes behind the **In the field** panel. |
 | `src/components/FieldPanel.tsx` | The **In the field** panel on each box. |
 | `src/components/FieldMapView.tsx` | The **Field map** view: the whole field, with your ideas placed on it. |
-| `scripts/dev-all.sh` | `npm run dev:all`: HypoTree + the field map backend together. |
+| `scripts/dev-all.sh` | `npm run dev:all`: Branchly + the field map backend together. |
 | `research-tree/` | The field-scale literature map (Python service). |
 | `src/lib/semanticScholar.ts` | Semantic Scholar Academic Graph API search and citation formatting. |
 | `src/app/api/chat/route.ts` | Route handler for node-scoped Claude conversation. |

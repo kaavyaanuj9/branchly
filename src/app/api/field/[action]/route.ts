@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import * as rt from "@/lib/researchTree";
 
 // The "Field" panel's server side: forwards to Research Tree (the field-scale literature
-// map) so the browser only ever talks to HypoTree.
+// map) so the browser only ever talks to Branchly.
 //
 //   GET  /api/field/status
 //   GET  /api/field/tree                    the whole field map (branches, topics, stats)

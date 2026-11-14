@@ -20,7 +20,7 @@ import { useFieldNav } from "./fieldNav";
 import { useUI } from "./uiContext";
 
 // "Field" panel: the team's box seen against the whole field, from Research Tree (the
-// cross-lab literature map). HypoTree is the project; Research Tree is everyone else's work.
+// cross-lab literature map). Branchly is the project; Research Tree is everyone else's work.
 //   Where it sits  - path on the field map, how crowded it is, the closest papers
 //   Tested?        - has this problem + method (+ setting) combination been done?
 //   Read           - reading list from the citation lineage around the idea

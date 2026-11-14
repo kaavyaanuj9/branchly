@@ -1,6 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
-// Sign-in for HypoTree. Two ways in:
+// Sign-in for Branchly. Two ways in:
 //  - "Sign in with Google" (real): set GOOGLE_CLIENT_ID. Google's ID token is checked
 //    server-side (signature, audience, expiry, verified email) before a session is made.
 //  - Demo sign-in with a Gmail address (no password), only while GOOGLE_CLIENT_ID is unset
@@ -14,6 +14,8 @@ export interface SessionUser {
   email: string;
   name: string;
   picture?: string;
+  /** lab or institution, from the profile form */
+  lab?: string;
   /** true when signed in with the demo (unverified) Gmail form */
   demo?: boolean;
   exp: number;

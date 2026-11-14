@@ -5,7 +5,7 @@ import { connection } from "next/server";
 import { HypoTreeApp } from "@/components/HypoTreeApp";
 import { readSession, SESSION_COOKIE } from "@/lib/auth";
 
-// The home page ("/"): the HypoTree workspace, for signed-in users.
+// The home page ("/"): the Branchly workspace, for signed-in users.
 // "/?start=1" opens the idea studio first (where a new idea becomes a tree).
 export default function Home({ searchParams }: { searchParams: Promise<{ start?: string }> }) {
   return (
@@ -22,7 +22,7 @@ async function Workspace({ searchParams }: { searchParams: Promise<{ start?: str
   const { start } = await searchParams;
   return (
     <HypoTreeApp
-      user={{ email: user.email, name: user.name, picture: user.picture, demo: user.demo }}
+      user={{ email: user.email, name: user.name, picture: user.picture, lab: user.lab, demo: user.demo }}
       startInStudio={start === "1"}
     />
   );

@@ -451,7 +451,7 @@ export function HelpModal({ onClose }: { onClose: () => void }) {
     ["Choose next step", "If a result is unexpected, the AI suggests new ideas (dashed boxes). You approve one; the old idea is folded away."],
   ];
   return (
-    <Modal title="How HypoTree works" onClose={onClose} wide>
+    <Modal title="How Branchly works" onClose={onClose} wide>
       <div className="space-y-6">
         <ol className="grid gap-3 sm:grid-cols-2">
           {steps.map(([t, d], i) => (

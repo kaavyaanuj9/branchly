@@ -1,4 +1,4 @@
-// The "shapes" of the data HypoTree works with.
+// The "shapes" of the data Branchly works with.
 // TypeScript uses these to catch mistakes (e.g. a typo in a field name).
 
 /** What kind of box this is in the tree. */

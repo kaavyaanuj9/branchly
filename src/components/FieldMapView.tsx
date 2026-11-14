@@ -55,7 +55,7 @@ import { PaperRow, type FieldPaper } from "./FieldPanel";
 import { FieldNavContext, loadAlerts, saveAlerts, type FieldNav, type SavedAlert } from "./fieldNav";
 import { useUI } from "./uiContext";
 
-// The field map, inside HypoTree: the whole field (from Research Tree) as a tree of curated
+// The field map, inside Branchly: the whole field (from Research Tree) as a tree of curated
 // branches and grown topics, with the team's own ideas placed on it. Same canvas as the
 // project tree, laid out left to right so dozens of topics stay readable.
 
@@ -926,7 +926,7 @@ function WorkingOn() {
   );
 }
 
-/** Have an idea in this topic? Check it, then take it into HypoTree. */
+/** Have an idea in this topic? Check it, then take it into Branchly. */
 function IdeaHere({ label, onIdea }: { label: string; onIdea: (q: string) => void }) {
   const [text, setText] = useState("");
   return (

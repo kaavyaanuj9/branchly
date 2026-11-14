@@ -14,7 +14,7 @@ import {
 //   POST /api/auth/logout
 //   GET  /api/auth/me                     who is signed in
 
-async function startSession(user: { email: string; name: string; picture?: string; demo?: boolean }) {
+async function startSession(user: { email: string; name: string; picture?: string; lab?: string; demo?: boolean }) {
   const { value, maxAge } = makeSession(user);
   (await cookies()).set(SESSION_COOKIE, value, {
     httpOnly: true,
@@ -32,14 +32,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ act
   try {
     if (action === "google") {
       if (!body.credential) return NextResponse.json({ error: "missing credential" }, { status: 400 });
-      return startSession(await verifyGoogleCredential(body.credential));
+      const lab = (body.lab || "").trim().slice(0, 120) || undefined;
+      return startSession({ ...(await verifyGoogleCredential(body.credential)), lab });
     }
     if (action === "demo") {
       if (!demoAllowed()) return NextResponse.json({ error: "Please sign in with Google." }, { status: 403 });
       const email = (body.email || "").trim().toLowerCase();
       if (!isGmail(email)) return NextResponse.json({ error: "Please enter a Gmail address." }, { status: 400 });
-      const name = email.split("@")[0].replace(/[._]/g, " ");
-      return startSession({ email, name, demo: true });
+      const name = (body.name || "").trim().slice(0, 80) || email.split("@")[0].replace(/[._]/g, " ");
+      const lab = (body.lab || "").trim().slice(0, 120) || undefined;
+      return startSession({ email, name, lab, demo: true });
     }
     if (action === "logout") {
       (await cookies()).delete(SESSION_COOKIE);

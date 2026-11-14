@@ -5,7 +5,7 @@ import { connection } from "next/server";
 import { LoginCard } from "@/components/LoginCard";
 import { demoAllowed, googleClientId, readSession, SESSION_COOKIE } from "@/lib/auth";
 
-export const metadata = { title: "Sign in · HypoTree" };
+export const metadata = { title: "Sign in · Branchly" };
 
 export default function LoginPage() {
   return (

@@ -345,7 +345,7 @@ export function IdeaPanel({
   );
 }
 
-// ── from the field map into HypoTree ─────────────────────────────────────────
+// ── from the field map into Branchly ─────────────────────────────────────────
 
 /** Turn an idea found on the field map into a hypothesis tree, or a box in the current one. */
 function BringToProject({ q, located }: { q: string; located: LocateResult }) {
@@ -434,7 +434,7 @@ function BringToProject({ q, located }: { q: string; located: LocateResult }) {
 
   return (
     <section className="space-y-2 rounded-xl border border-indigo-200 bg-indigo-50/50 p-3">
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-indigo-600">Take it into HypoTree</p>
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-indigo-600">Take it into Branchly</p>
       <button
         onClick={startTree}
         disabled={!!busy}

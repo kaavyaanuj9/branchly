@@ -63,7 +63,7 @@ export async function searchSemanticScholar(
 
   const headers: Record<string, string> = {
     Accept: "application/json",
-    "User-Agent": "HypoTree-Scientific-Workspace/1.0 (academic-research)",
+    "User-Agent": "Branchly-Scientific-Workspace/1.0 (academic-research)",
   };
 
   if (apiKey) {

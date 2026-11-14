@@ -1,4 +1,4 @@
-// Server-side client for Research Tree: the field-scale literature map that HypoTree uses as
+// Server-side client for Research Tree: the field-scale literature map that Branchly uses as
 // its literature layer (see research-tree/). Research Tree runs as its own service; the
 // cancer & cell biology instance listens on port 8766 by default.
 

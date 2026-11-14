@@ -1,6 +1,6 @@
 import type { Project } from "./types";
 
-// Sample project, modelled on the Venetoclax / BCL-2 example in the HypoTree
+// Sample project, modelled on the Venetoclax / BCL-2 example in the Branchly
 // overview. Swap this out later for data coming from a database or the AI.
 
 export const sampleProject: Project = {
