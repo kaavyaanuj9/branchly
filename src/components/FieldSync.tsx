@@ -16,7 +16,7 @@ type Placement = { node: string; placement_confidence: number; novelty_level: Tr
 
 export function FieldSync() {
   const { state, dispatch } = useStore();
-  const { nodes, hydrated, projectId } = state;
+  const { nodes, hydrated } = state;
 
   // 1. Place ideas, one request at a time (each update re-runs this with the rest).
   useEffect(() => {
@@ -87,7 +87,7 @@ export function FieldSync() {
       live = false;
       clearInterval(t);
     };
-  }, [watched, hydrated, projectId, dispatch]);
+  }, [watched, hydrated, dispatch]);
 
   return null;
 }

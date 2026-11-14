@@ -1,22 +1,19 @@
 import { Suspense } from "react";
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import { connection } from "next/server";
 import { LoginCard } from "@/components/LoginCard";
-import { demoAllowed, googleClientId, readSession, SESSION_COOKIE } from "@/lib/auth";
 
 export const metadata = { title: "Sign in · Branchly" };
 
-export default function LoginPage() {
+// Sign in with Google (Firebase). Signed-in visitors are sent on by src/proxy.ts.
+export default function LoginPage({ searchParams }: PageProps<"/login">) {
   return (
-    <Suspense fallback={<main className="min-h-dvh bg-[#0b1020]" />}>
-      <Login />
+    <Suspense fallback={<main className="min-h-dvh bg-[#f7f7f6]" />}>
+      <Login searchParams={searchParams} />
     </Suspense>
   );
 }
 
-async function Login() {
-  await connection(); // per request: reads the sign-in cookie and the clock
-  if (readSession((await cookies()).get(SESSION_COOKIE)?.value)) redirect("/?start=1");
-  return <LoginCard googleClientId={googleClientId()} demo={demoAllowed()} />;
+async function Login({ searchParams }: Pick<PageProps<"/login">, "searchParams">) {
+  const { next } = await searchParams;
+  // new sign-ins start in the idea studio unless they were heading somewhere
+  return <LoginCard next={typeof next === "string" ? next : "/new"} />;
 }

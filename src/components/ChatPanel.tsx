@@ -12,7 +12,7 @@ import { getAgentReply } from "@/lib/mockAgent";
 
 /** The chat with this box's own agent, docked at the bottom of the side panel. */
 export function ChatDock({ node }: { node: TreeNode }) {
-  const { state, dispatch } = useStore();
+  const { state, dispatch, canEdit } = useStore();
   const [draft, setDraft] = useState("");
   const [typingFor, setTypingFor] = useState<string | null>(null);
   // past conversation stays folded until asked for (or until you ask something)
@@ -128,7 +128,7 @@ export function ChatDock({ node }: { node: TreeNode }) {
             ) : (
               <AgentBubble key={m.id}>
                 <span className="whitespace-pre-line">{m.text}</span>
-                {m.proposal && <ProposalCard message={m} onAccept={() => acceptProposal(m)} />}
+                {m.proposal && <ProposalCard message={m} onAccept={canEdit ? () => acceptProposal(m) : undefined} />}
               </AgentBubble>
             ),
           )}
@@ -189,7 +189,7 @@ function AgentBubble({ children }: { children: React.ReactNode }) {
   );
 }
 
-function ProposalCard({ message, onAccept }: { message: ChatMessage; onAccept: () => void }) {
+function ProposalCard({ message, onAccept }: { message: ChatMessage; onAccept?: () => void }) {
   const p = message.proposal!;
   const isExp = p.kind === "experiment";
   return (
@@ -210,6 +210,8 @@ function ProposalCard({ message, onAccept }: { message: ChatMessage; onAccept: (
         <p className="mt-2 flex items-center gap-1 text-[12px] font-semibold text-emerald-600">
           <Check className="size-3.5" /> Added to the tree
         </p>
+      ) : !onAccept ? (
+        <p className="mt-2 text-[12px] text-neutral-500">An editor can add this to the tree.</p>
       ) : (
         <button
           onClick={onAccept}

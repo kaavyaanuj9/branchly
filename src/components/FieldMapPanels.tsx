@@ -17,7 +17,10 @@ import {
   GitBranchPlus,
   X,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { newId, useStore } from "@/lib/store";
+import { createTree } from "@/lib/teams";
+import { useTeamContext } from "./teamContext";
 import type { TreeNode } from "@/lib/types";
 import { PaperRow, ReadingList, TestedCheck, toEvidence, type FieldPaper } from "./FieldPanel";
 import { loadAlerts, useFieldNav, type SavedAlert } from "./fieldNav";
@@ -349,12 +352,14 @@ export function IdeaPanel({
 
 /** Turn an idea found on the field map into a hypothesis tree, or a box in the current one. */
 function BringToProject({ q, located }: { q: string; located: LocateResult }) {
-  const { state, dispatch } = useStore();
+  const { state, dispatch, canEdit } = useStore();
   const { setView } = useUI();
+  const { team, uid } = useTeamContext();
+  const router = useRouter();
   const [claim, setClaim] = useState(true);
   const [busy, setBusy] = useState<"new" | "add" | null>(null);
   const box = state.nodes.find((n) => n.id === state.selectedId);
-  const parent = box && (box.kind === "root" || box.kind === "hypothesis") && !box.folded ? box : null;
+  const parent = canEdit && box && (box.kind === "root" || box.kind === "hypothesis") && !box.folded ? box : null;
   const home = located.placement_confidence >= 0.35;
   const fieldBits = {
     fieldTopic: home ? located.node : undefined,
@@ -375,7 +380,7 @@ function BringToProject({ q, located }: { q: string; located: LocateResult }) {
       await getJSON("/api/field/signal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ node: located.node, kind: "claim", who: state.title, text: q, visibility: "private" }),
+        body: JSON.stringify({ node: located.node, kind: "claim", who: team.personal ? state.title : team.name, text: q, visibility: "private" }),
       }).catch(() => null);
     return watch?.token;
   };
@@ -383,11 +388,8 @@ function BringToProject({ q, located }: { q: string; located: LocateResult }) {
   const startTree = async () => {
     setBusy("new");
     const token = await tellTheField();
-    dispatch({
-      type: "newProject",
-      title: q.length > 90 ? q.slice(0, 87) + "…" : q,
-      selectedId: "root",
-      nodes: [
+    // a new tree in the same team, opened right away
+    const id = await createTree(team.id, uid, q.length > 90 ? q.slice(0, 87) + "…" : q, [
         {
           id: "root",
           parentId: null,
@@ -400,10 +402,12 @@ function BringToProject({ q, located }: { q: string; located: LocateResult }) {
           fieldTopicFor: q,
           ...fieldBits,
         },
-      ],
+    ]).catch((e) => {
+      console.error("Couldn't create the tree", e);
+      return null;
     });
     setBusy(null);
-    setView("project");
+    if (id) router.push(`/teams/${team.id}/trees/${id}`);
   };
 
   const addUnder = async () => {
@@ -454,8 +458,8 @@ function BringToProject({ q, located }: { q: string; located: LocateResult }) {
         </button>
       )}
       <p className="text-[11px] leading-relaxed text-indigo-900/70">
-        Brings along the 3 closest papers as evidence and an alert for new ones. Your current project stays in the
-        project list (click its title).
+        Brings along the 3 closest papers as evidence and an alert for new ones. The new tree goes in{" "}
+        {team.personal ? "your personal space" : team.name}; this one stays as it is.
       </p>
       {home && (
         <label className="flex items-start gap-1.5 text-[11.5px] text-indigo-900/80">

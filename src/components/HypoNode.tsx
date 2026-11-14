@@ -5,6 +5,8 @@ import { Archive, BellRing, Check, ChevronRight, CircleDot, FlaskConical, Route,
 import type { TreeNode } from "@/lib/types";
 import { useStore } from "@/lib/store";
 import { NODE_WIDTH, ROOT_WIDTH } from "@/lib/tree";
+import { experimentProgress, stageOf } from "@/lib/progress";
+import { AvatarStack, StagePill } from "./Assignment";
 import { unseenHits } from "./FieldSync";
 
 // One box in the tree, drawn left to right:
@@ -33,11 +35,11 @@ const handles = (
 
 export function HypoNode({ data, selected }: NodeProps<HypoFlowNode>) {
   const { node, depth, childCount, hiddenCount } = data;
-  const { dispatch } = useStore();
+  const { state, dispatch, canEdit } = useStore();
   const stop = (e: React.MouseEvent) => e.stopPropagation();
 
   const toggle =
-    childCount > 0 && !node.folded ? (
+    childCount > 0 && !node.folded && canEdit ? (
       <button
         onClick={(e) => {
           stop(e);
@@ -65,15 +67,17 @@ export function HypoNode({ data, selected }: NodeProps<HypoFlowNode>) {
           <span className="flex items-center gap-1.5">
             <Archive className="size-3.5" /> Folded away
           </span>
-          <button
-            onClick={(e) => {
-              stop(e);
-              dispatch({ type: "setFolded", id: node.id, folded: false });
-            }}
-            className="nodrag rounded px-1 text-[10.5px] text-neutral-500 hover:bg-neutral-200"
-          >
-            Unfold
-          </button>
+          {canEdit && (
+            <button
+              onClick={(e) => {
+                stop(e);
+                dispatch({ type: "setFolded", id: node.id, folded: false });
+              }}
+              className="nodrag rounded px-1 text-[10.5px] text-neutral-500 hover:bg-neutral-200"
+            >
+              Unfold
+            </button>
+          )}
         </p>
         <p className="line-clamp-2 text-[12px] leading-snug line-through decoration-neutral-300">{node.title}</p>
       </div>
@@ -110,7 +114,7 @@ export function HypoNode({ data, selected }: NodeProps<HypoFlowNode>) {
           <Sparkles className="size-3.5" /> Suggested
         </p>
         <p className="line-clamp-2 text-[12px] leading-snug text-neutral-800">{node.title}</p>
-        <div className="mt-2 flex items-center gap-1.5">
+        <div className={`mt-2 flex items-center gap-1.5 ${canEdit ? "" : "hidden"}`}>
           <button
             onClick={(e) => {
               stop(e);
@@ -140,6 +144,7 @@ export function HypoNode({ data, selected }: NodeProps<HypoFlowNode>) {
   const outcome = node.status === "supported" || node.status === "contradicted" || node.status === "inconclusive" ? OUTCOME[node.status] : null;
   const Icon = isExp ? FlaskConical : isPrediction ? CircleDot : Route;
   const label = isExp ? "Experiment" : isPrediction ? "Prediction" : "Hypothesis";
+  const expProgress = experimentProgress(state.nodes, node.id);
   const tint = outcome && (isPrediction || isExp || node.result) ? outcome.card : "border-neutral-300 bg-white";
 
   return (
@@ -171,6 +176,12 @@ export function HypoNode({ data, selected }: NodeProps<HypoFlowNode>) {
         )}
       </div>
       <p className={`${isExp ? "line-clamp-2" : "line-clamp-3"} text-[12.5px] leading-snug text-neutral-800`}>{node.title}</p>
+      {!isExp && (stageOf(node) !== "not_started" || (node.assignees?.length ?? 0) > 0) && (
+        <div className="mt-1.5 flex items-center justify-between gap-1">
+          <StagePill stage={stageOf(node)} size="xs" />
+          <AvatarStack uids={node.assignees ?? []} size="size-5" />
+        </div>
+      )}
       {!isExp && (
         <p className="mt-1.5 flex flex-wrap items-center gap-x-1 text-[11px] text-neutral-500">
           {node.confidence !== undefined && <b className="font-semibold text-neutral-800">{Math.round(node.confidence * 100)}%</b>}
@@ -180,6 +191,14 @@ export function HypoNode({ data, selected }: NodeProps<HypoFlowNode>) {
           </span>
           <FieldLine node={node} inline />
         </p>
+      )}
+      {!isExp && expProgress.total > 0 && (
+        <span
+          className="absolute inset-x-0 bottom-0 h-[3px] overflow-hidden rounded-b-[10px] bg-neutral-100"
+          title={`${expProgress.withResults} of ${expProgress.total} experiments have results`}
+        >
+          <span className="block h-full bg-neutral-800" style={{ width: `${(expProgress.withResults / expProgress.total) * 100}%` }} />
+        </span>
       )}
       {toggle}
     </div>

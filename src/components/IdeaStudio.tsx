@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowLeft, ArrowRight, FlaskConical, Loader2, Route, Sparkles, Sprout, X } from "lucide-react";
-import { newId, useStore } from "@/lib/store";
+import { newId } from "@/lib/store";
 import type { ChatMessage, TreeNode } from "@/lib/types";
 import { BranchField } from "./BranchField";
 import { getJSON, leavesOf, type FieldItem } from "./FieldMapPanels";
@@ -66,14 +66,16 @@ type Phase = "chat" | "map" | "grow";
 
 export function IdeaStudio({
   user,
-  onDone,
+  onCreate,
   onClose,
 }: {
   user: { name: string; email: string };
-  onDone: () => void;
+  /** Save the new tree (title, nodes, the studio chat on the main box) and open it. */
+  onCreate: (tree: { title: string; nodes: TreeNode[]; chats: Record<string, ChatMessage[]> }) => Promise<void>;
   onClose?: () => void;
 }) {
-  const { dispatch } = useStore();
+  // an alert for new papers on the idea, started while the tree grows
+  const watchRef = useRef<Promise<string | undefined> | null>(null);
   const [phase, setPhase] = useState<Phase>("chat");
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [draft, setDraft] = useState("");
@@ -156,7 +158,7 @@ export function IdeaStudio({
   };
 
   // ── grow: the tree sprouts, then becomes the real project ──
-  const finish = useCallback(() => {
+  const finish = useCallback(async () => {
     if (!latest || !located) return;
     const home = located.placement_confidence >= 0.35;
     const path = located.path.slice(1).map((p) => p.label).join(" › ");
@@ -189,26 +191,34 @@ export function IdeaStudio({
       text: m.f ? `${m.f.reply}\n\nHypothesis: ${m.f.hypothesis}${m.f.why ? `\n\n${m.f.why}` : ""}` : m.content,
     }));
     const h = latest.hypothesis;
-    dispatch({
-      type: "newProject",
-      title: h.length > 90 ? h.slice(0, 87) + "…" : h,
-      nodes: [root, ...kids],
-      chats: { root: chat }, // the studio conversation continues in the main box's chat
-    });
-    // an alert for new papers on the idea (best effort, after the tree exists)
-    getJSON<{ token: string }>("/api/field/watch", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query: h, label: h }),
-    }).then(
-      (r) => dispatch({ type: "updateNode", id: "root", patch: { fieldWatch: r.token } }),
-      () => {},
-    );
-    onDone();
-  }, [latest, located, generated, msgs, dispatch, onDone]);
+    // the alert is best effort: wait at most a few seconds for it
+    const token = await Promise.race([
+      watchRef.current ?? Promise.resolve(undefined),
+      new Promise<undefined>((r) => setTimeout(() => r(undefined), 4000)),
+    ]);
+    try {
+      await onCreate({
+        title: h.length > 90 ? h.slice(0, 87) + "…" : h,
+        nodes: [token ? { ...root, fieldWatch: token } : root, ...kids],
+        chats: { root: chat }, // the studio conversation continues in the main box's chat
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setPhase("map");
+    }
+  }, [latest, located, generated, msgs, onCreate]);
 
   const grow = () => {
     setPhase("grow");
+    if (latest)
+      watchRef.current = getJSON<{ token: string }>("/api/field/watch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: latest.hypothesis, label: latest.hypothesis }),
+      }).then(
+        (r) => r.token,
+        () => undefined,
+      );
     setTimeout(finish, 2600 + (candidates?.length ?? 0) * 250);
   };
 

@@ -1,54 +1,48 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { AnimatePresence } from "motion/react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { ReactFlowProvider } from "@xyflow/react";
-import {
-  BookOpen,
-  ChevronsUpDown,
-  CircleHelp,
-  LogOut,
-  Lightbulb,
-  Plus,
-} from "lucide-react";
-import { getProject, listProjects, StoreProvider, useStore } from "@/lib/store";
-import { FieldSync } from "./FieldSync";
-import { IdeaStudio } from "./IdeaStudio";
-import { Wordmark } from "./BranchField";
+import { doc, writeBatch } from "firebase/firestore";
+import { BookOpen, ChevronRight, CircleHelp, Eye, Lightbulb, ListChecks, Loader2, Plus, Sparkles } from "lucide-react";
+import { StoreProvider, useStore } from "@/lib/store";
+import { useCurrentUser } from "@/lib/firebase/FirebaseProvider";
+import { getDb } from "@/lib/firebase/client";
 import { findNode } from "@/lib/tree";
-import { TreeCanvas } from "./TreeCanvas";
-import { FieldMapView } from "./FieldMapView";
+import type { Team, TreeNode } from "@/lib/types";
+import { Wordmark } from "./BranchField";
+import { DecomposeModal } from "./DecomposeModal";
 import { DetailPanel } from "./DetailPanel";
+import { FieldMapView } from "./FieldMapView";
+import { FieldSync } from "./FieldSync";
 import { HelpModal, NodeEditorModal, UploadResultModal } from "./Modals";
 import { PaperSearchModal } from "./PaperSearchModal";
-import { DecomposeModal } from "./DecomposeModal";
+import { ProgressPanel } from "./ProgressPanel";
+import { TeamContext } from "./teamContext";
+import { TreeCanvas } from "./TreeCanvas";
+import { TreeGenerationModal } from "./teams/TreeGenerationModal";
 import { UIContext, type EditorRequest, type UIContextValue } from "./uiContext";
+import { InvitesBell, UserMenu } from "./UserMenu";
 
-// The whole Branchly screen: header, toolbar, tree, detail panel and chat.
+// One team's hypothesis tree, live from Firestore: header, tree (or the field map around it),
+// the side panel with each box's own AI, and the team's progress. Viewers get a read-only view.
 
-export interface SignedInUser {
-  email: string;
-  name: string;
-  picture?: string;
-  lab?: string;
-  demo?: boolean;
-}
-
-export function HypoTreeApp({ user, startInStudio = false }: { user: SignedInUser; startInStudio?: boolean }) {
+export function HypoTreeApp({ team, treeId }: { team: Team; treeId: string }) {
+  const { uid } = useCurrentUser();
+  const role = team.roles[uid];
   return (
-    <StoreProvider>
+    <StoreProvider key={`${team.id}/${treeId}`} teamId={team.id} treeId={treeId} canEdit={role === "owner" || role === "editor"}>
       <ReactFlowProvider>
-        <Workspace user={user} startInStudio={startInStudio} />
+        <TeamContext.Provider value={{ team, uid }}>
+          <Workspace team={team} treeId={treeId} />
+        </TeamContext.Provider>
       </ReactFlowProvider>
     </StoreProvider>
   );
 }
 
-function Workspace({ user, startInStudio }: { user: SignedInUser; startInStudio: boolean }) {
-  const { state, dispatch } = useStore();
-  // the idea studio: chat an idea -> field map -> a new hypothesis tree
-  const [studio, setStudio] = useState(startInStudio);
+function Workspace({ team, treeId }: { team: Team; treeId: string }) {
+  const { state, dispatch, canEdit } = useStore();
   const [chatOpen, setChatOpen] = useState(true);
   const [editor, setEditor] = useState<EditorRequest | null>(null);
   const [uploadFor, setUploadFor] = useState<string | null>(null);
@@ -57,6 +51,11 @@ function Workspace({ user, startInStudio }: { user: SignedInUser; startInStudio:
   const [helpOpen, setHelpOpen] = useState(false);
   const [view, setView] = useState<"project" | "field">("project");
   const [fieldFocus, setFieldFocus] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
+  // The progress panel stays open until you select a different box.
+  const [progressAnchor, setProgressAnchor] = useState<string | null | undefined>(undefined);
+  const progressOpen = progressAnchor !== undefined && progressAnchor === state.selectedId;
+  const setProgressOpen = (open: boolean) => setProgressAnchor(open ? state.selectedId : undefined);
 
   const selected = findNode(state.nodes, state.selectedId);
 
@@ -79,107 +78,122 @@ function Workspace({ user, startInStudio }: { user: SignedInUser; startInStudio:
     [chatOpen, state.selectedId, view, fieldFocus],
   );
 
-  // Esc closes the side panels and modals.
+  // A tree that is only its main idea can be grown in one go (sub-hypotheses, experiments, papers).
+  // The callback must stay the same while generation runs (the modal restarts if it changes),
+  // so it reads the latest nodes from a ref.
+  const nodesRef = useRef(state.nodes);
+  useEffect(() => {
+    nodesRef.current = state.nodes;
+  }, [state.nodes]);
+  const saveGenerated = useCallback(
+    async (nodes: TreeNode[]) => {
+      try {
+        const db = getDb();
+        const treeRef = doc(db, "teams", team.id, "trees", treeId);
+        const batch = writeBatch(db);
+        // keep the existing main box (its field placement, chat), add everything below it
+        const root = nodesRef.current.find((n) => n.id === "root");
+        nodes.forEach((node, order) => {
+          const merged =
+            node.id === "root" && root ? { ...root, evidence: [...root.evidence, ...node.evidence].slice(0, 6) } : node;
+          batch.set(doc(treeRef, "nodes", node.id), { ...merged, order });
+        });
+        batch.update(treeRef, { updatedAt: Date.now() });
+        await batch.commit();
+      } catch (err) {
+        console.error("Failed to save the generated tree:", err);
+      } finally {
+        setGenerating(false);
+      }
+    },
+    [team.id, treeId],
+  );
+
+  // Esc closes the side panel.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (
-        e.key === "Escape" &&
-        !editor &&
-        !uploadFor &&
-        !helpOpen &&
-        !paperSearchFor &&
-        !decomposeFor
-      )
+      if (e.key === "Escape" && !editor && !uploadFor && !helpOpen && !paperSearchFor && !decomposeFor)
         dispatch({ type: "select", id: null });
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [dispatch, editor, uploadFor, helpOpen, paperSearchFor, decomposeFor]);
 
-  // "Add Sub-Hypothesis" goes under the selected idea, or under the main idea.
+  // "Add sub-hypothesis" goes under the selected idea, or under the main idea.
   const addParentId =
-    selected && (selected.kind === "hypothesis" || selected.kind === "root") && !selected.folded
-      ? selected.id
-      : "root";
+    selected && (selected.kind === "hypothesis" || selected.kind === "root") && !selected.folded ? selected.id : "root";
+  const toReview = state.nodes.filter((n) => n.kind === "suggestion" && !n.folded).length;
+  const teamLabel = team.personal ? "Personal" : team.name;
 
-  const counts = state.nodes.reduce(
-    (acc, n) => {
-      if (n.folded) return acc;
-      if (n.kind === "hypothesis") acc.ideas++;
-      if (n.kind === "experiment") acc.experiments++;
-      if (n.status === "supported") acc.supported++;
-      if (n.status === "contradicted") acc.contradicted++;
-      if (n.kind === "suggestion") acc.suggestions++;
-      return acc;
-    },
-    { ideas: 0, experiments: 0, supported: 0, contradicted: 0, suggestions: 0 },
-  );
+  if (state.missing)
+    return (
+      <div className="flex h-dvh flex-col">
+        <Header team={team} title="" />
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-neutral-500">
+          This tree was deleted, or you no longer have access to it.
+          <Link href={`/teams/${team.id}`} className="font-medium text-neutral-900 hover:underline">
+            Back to {teamLabel}
+          </Link>
+        </div>
+      </div>
+    );
+  if (!state.hydrated)
+    return (
+      <div className="flex h-dvh items-center justify-center text-neutral-400">
+        <Loader2 className="size-5 animate-spin" />
+      </div>
+    );
 
+  const button = "flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-3 py-[7px] text-[13px] font-medium text-neutral-800 transition hover:border-neutral-900";
   return (
     <UIContext.Provider value={ui}>
-      <FieldSync />
-      <AnimatePresence>
-        {studio && (
-          <IdeaStudio
-            key="studio"
-            user={user}
-            onDone={() => {
-              setStudio(false);
-              setView("project");
-              window.history.replaceState(null, "", "/");
-            }}
-            onClose={() => {
-              setStudio(false);
-              window.history.replaceState(null, "", "/");
-            }}
-          />
-        )}
-      </AnimatePresence>
-      <div className="flex h-dvh flex-col bg-white text-slate-900">
-        {/* Header */}
-        <header className="flex h-[60px] shrink-0 items-center justify-between gap-4 border-b border-neutral-200 bg-white px-6">
-          <div className="flex min-w-0 items-center gap-4">
-            <Wordmark className="text-[23px]" />
-            <span className="h-6 w-px bg-neutral-200" />
-            <ProjectSwitcher />
-            <div className="ml-2 flex shrink-0 rounded-lg bg-neutral-100 p-0.5 text-[12.5px]">
-              {(
-                [
-                  ["project", "Tree"],
-                  ["field", "Field map"],
-                ] as const
-              ).map(([v, label]) => (
-                <button
-                  key={v}
-                  onClick={() => setView(v)}
-                  className={`whitespace-nowrap rounded-md px-2.5 py-1 font-medium transition ${
-                    view === v ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-800"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+      {canEdit && <FieldSync />}
+      <div className="flex h-dvh flex-col bg-white text-neutral-900">
+        <Header team={team} title={state.title}>
+          <div className="ml-2 flex shrink-0 rounded-lg bg-neutral-100 p-0.5 text-[12.5px]">
+            {(
+              [
+                ["project", "Tree"],
+                ["field", "Field map"],
+              ] as const
+            ).map(([v, label]) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={`whitespace-nowrap rounded-md px-2.5 py-1 font-medium transition ${
+                  view === v ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-800"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {view === "project" && counts.suggestions > 0 && (
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            {!canEdit && (
+              <span className="flex items-center gap-1 rounded-full bg-neutral-100 px-2.5 py-1 text-[12px] font-medium text-neutral-600">
+                <Eye className="size-3.5" /> View only
+              </span>
+            )}
+            {view === "project" && toReview > 0 && (
               <button
                 onClick={() => dispatch({ type: "select", id: state.nodes.find((n) => n.kind === "suggestion")?.id ?? null })}
                 title="AI suggestions waiting for your approval"
-                className="flex items-center gap-2 rounded-lg border border-neutral-300 bg-white px-3 py-[7px] text-[13px] font-medium text-neutral-800 transition hover:border-neutral-900"
+                className={button}
               >
-                <span className="size-1.5 rounded-full bg-neutral-900" /> {counts.suggestions} to review
+                <span className="size-1.5 rounded-full bg-neutral-900" /> {toReview} to review
               </button>
             )}
             {view === "project" && (
-              <button
-                onClick={() => setPaperSearchFor(selected?.id || "root")}
-                className="flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-3 py-[7px] text-[13px] font-medium text-neutral-800 transition hover:border-neutral-900"
-              >
+              <button onClick={() => setProgressOpen(!progressOpen)} className={`${button} ${progressOpen ? "!border-neutral-900" : ""}`}>
+                <ListChecks className="size-3.5" /> Progress
+              </button>
+            )}
+            {view === "project" && canEdit && (
+              <button onClick={() => setPaperSearchFor(selected?.id || "root")} className={button}>
                 <BookOpen className="size-3.5" /> Search literature
               </button>
             )}
-            {view === "project" && (
+            {view === "project" && canEdit && (
               <button
                 onClick={() => setEditor({ mode: "add", parentId: addParentId, kind: "hypothesis" })}
                 className="flex items-center gap-1.5 rounded-lg bg-neutral-900 px-3.5 py-[7px] text-[13px] font-semibold text-white transition hover:bg-neutral-700"
@@ -187,13 +201,9 @@ function Workspace({ user, startInStudio }: { user: SignedInUser; startInStudio:
                 <Plus className="size-3.5" /> Add sub-hypothesis
               </button>
             )}
-            <button
-              onClick={() => setStudio(true)}
-              title="Start from a new idea"
-              className="flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-3 py-[7px] text-[13px] font-medium text-neutral-800 transition hover:border-neutral-900"
-            >
+            <Link href={`/new?team=${encodeURIComponent(team.id)}`} title="Start a new tree from an idea" className={button}>
               <Lightbulb className="size-3.5" /> New idea
-            </button>
+            </Link>
             <button
               onClick={() => setHelpOpen(true)}
               className="rounded-full p-1.5 text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900"
@@ -201,124 +211,81 @@ function Workspace({ user, startInStudio }: { user: SignedInUser; startInStudio:
             >
               <CircleHelp className="size-[18px]" />
             </button>
-            <UserChip user={user} />
           </div>
-        </header>
+        </Header>
 
-        {/* Workspace */}
         {view === "field" ? (
           <main className="flex min-h-0 flex-1">
             <FieldMapView />
           </main>
         ) : (
-        <main className="flex min-h-0 flex-1">
-          <div className="relative min-w-0 flex-1 bg-[#f6f6f4]">
-            <TreeCanvas />
-          </div>
-          {selected && <DetailPanel key={`d-${selected.id}`} node={selected} />}
-        </main>
+          <main className="flex min-h-0 flex-1">
+            <div className="relative min-w-0 flex-1 bg-[#f6f6f4]">
+              <TreeCanvas />
+              {!selected && state.nodes.length <= 1 && canEdit && (
+                <div className="absolute left-1/2 top-5 z-10 flex -translate-x-1/2 items-center gap-3 rounded-full border border-neutral-300 bg-white/95 py-1.5 pl-4 pr-1.5 text-[13px] text-neutral-700 shadow-sm backdrop-blur">
+                  This tree is just its main idea.
+                  <button
+                    onClick={() => setGenerating(true)}
+                    className="flex items-center gap-1.5 rounded-full bg-neutral-900 px-3 py-1 font-semibold text-white hover:bg-neutral-700"
+                  >
+                    <Sparkles className="size-3.5" /> Grow the full tree
+                  </button>
+                </div>
+              )}
+            </div>
+            {progressOpen ? (
+              <ProgressPanel onClose={() => setProgressOpen(false)} />
+            ) : (
+              selected && <DetailPanel key={`d-${selected.id}`} node={selected} />
+            )}
+          </main>
         )}
       </div>
 
       {editor && <NodeEditorModal request={editor} onClose={() => setEditor(null)} />}
       {uploadFor && <UploadResultModal experimentId={uploadFor} onClose={() => setUploadFor(null)} />}
-      {paperSearchFor && (
-        <PaperSearchModal nodeId={paperSearchFor} onClose={() => setPaperSearchFor(null)} />
-      )}
-      {decomposeFor && (
-        <DecomposeModal nodeId={decomposeFor} onClose={() => setDecomposeFor(null)} />
-      )}
+      {paperSearchFor && <PaperSearchModal nodeId={paperSearchFor} onClose={() => setPaperSearchFor(null)} />}
+      {decomposeFor && <DecomposeModal nodeId={decomposeFor} onClose={() => setDecomposeFor(null)} />}
       {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
+      {generating && (
+        <TreeGenerationModal
+          hypothesisTitle={state.nodes.find((n) => n.id === "root")?.title || state.title}
+          isOpen
+          onSuccess={saveGenerated}
+          onCancel={() => setGenerating(false)}
+        />
+      )}
     </UIContext.Provider>
   );
 }
 
-
-
-
-/** The project title, which opens the list of projects kept in this browser. */
-function ProjectSwitcher() {
-  const { state, dispatch } = useStore();
-  const [open, setOpen] = useState(false);
-  const [projects, setProjects] = useState<{ id: string; title: string; updated: number }[]>([]);
+/** branchly | team › tree, then whatever the page adds, then invites and the account menu. */
+function Header({ team, title, children }: { team: Team; title: string; children?: React.ReactNode }) {
   return (
-    <div className="relative min-w-0 max-w-[min(420px,32vw)]">
-      <button
-        onClick={() => {
-          setProjects(listProjects());
-          setOpen(!open);
-        }}
-        title={`${state.title}\n(click to switch project)`}
-        aria-label="Switch project"
-        className="flex min-w-0 max-w-full items-center gap-1 rounded-md px-1.5 py-1 hover:bg-neutral-100"
-      >
-        <h1 className="min-w-0 truncate text-[14.5px] text-neutral-600">{state.title}</h1>
-        <ChevronsUpDown className="size-3.5 shrink-0 text-neutral-400" />
-      </button>
-      {open && (
-        <div className="absolute left-0 top-10 z-50 w-[420px] max-w-[90vw] rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg">
-          <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-            Projects in this browser
-          </p>
-          {projects.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => {
-                const proj = p.id === state.projectId ? null : getProject(p.id);
-                if (proj) dispatch({ type: "openProject", project: proj });
-                setOpen(false);
-              }}
-              className={`block w-full truncate rounded-md px-2 py-1.5 text-left text-[13px] ${
-                p.id === state.projectId ? "bg-indigo-50 font-semibold text-indigo-800" : "text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              {p.title}
-            </button>
-          ))}
-          <p className="border-t border-slate-100 px-2 pb-1 pt-2 text-[11.5px] text-slate-500">
-            Start a new project from an idea on the <b>Field map</b>: search it, then “Start a new hypothesis tree”.
-          </p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** Who is signed in, with sign-out. */
-function UserChip({ user }: { user: SignedInUser }) {
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="relative">
-      <button
-        onClick={() => setOpen(!open)}
-        title={user.email}
-        className="flex size-8 items-center justify-center overflow-hidden rounded-full bg-indigo-100 text-[13px] font-semibold text-indigo-800 ring-2 ring-white"
-      >
-        {user.picture ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={user.picture} alt="" referrerPolicy="no-referrer" className="size-full object-cover" />
-        ) : (
-          user.name.slice(0, 1).toUpperCase()
+    <header className="flex h-[60px] shrink-0 items-center gap-4 border-b border-neutral-200 bg-white px-6">
+      <Link href="/" title="All teams and trees">
+        <Wordmark className="text-[23px]" />
+      </Link>
+      <span className="h-6 w-px bg-neutral-200" />
+      <nav className="flex min-w-0 max-w-[min(460px,34vw)] items-center gap-1.5 text-[14.5px]">
+        <Link href={`/teams/${team.id}`} className="shrink-0 text-neutral-500 hover:text-neutral-900">
+          {team.personal ? "Personal" : team.name}
+        </Link>
+        {title && (
+          <>
+            <ChevronRight className="size-3.5 shrink-0 text-neutral-300" />
+            <h1 className="min-w-0 truncate text-neutral-700" title={title}>
+              {title}
+            </h1>
+          </>
         )}
-      </button>
-      {open && (
-        <div className="absolute right-0 top-10 z-50 w-64 rounded-xl border border-slate-200 bg-white p-3 text-[13px] shadow-lg">
-          <p className="font-semibold text-slate-900">{user.name}</p>
-          <p className="truncate text-slate-500">{user.email}</p>
-          {user.demo && <p className="mt-1 text-[11.5px] text-amber-700">Demo sign-in (email not verified)</p>}
-          <button
-            onClick={async () => {
-              await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
-              router.replace("/login");
-              router.refresh();
-            }}
-            className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 py-1.5 text-slate-700 hover:bg-slate-50"
-          >
-            <LogOut className="size-3.5" /> Sign out
-          </button>
-        </div>
-      )}
-    </div>
+      </nav>
+      {children}
+      <div className={`flex shrink-0 items-center gap-2 ${children ? "" : "ml-auto"}`}>
+        <InvitesBell />
+        <UserMenu />
+      </div>
+    </header>
   );
 }

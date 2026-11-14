@@ -1,0 +1,57 @@
+rules_version = '2';
+
+// HypoTree access rules. Membership (teams, roles, invites) is only ever
+// written by the server with the Admin SDK, which bypasses these rules.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function teamData(teamId) {
+      return get(/databases/$(database)/documents/teams/$(teamId)).data;
+    }
+
+    function roleIn(teamId) {
+      return signedIn() ? teamData(teamId).roles.get(request.auth.uid, "") : "";
+    }
+
+    function isMember(teamId) {
+      return roleIn(teamId) in ["owner", "editor", "viewer"];
+    }
+
+    function canEdit(teamId) {
+      return roleIn(teamId) in ["owner", "editor"];
+    }
+
+    match /teams/{teamId} {
+      allow read: if signedIn() && request.auth.uid in resource.data.memberIds;
+      allow write: if false;
+
+      match /trees/{treeId} {
+        allow read: if isMember(teamId);
+        allow create, update: if canEdit(teamId);
+        // Deleting a tree also deletes its nodes and chat, so it goes through the server.
+        allow delete: if false;
+
+        match /nodes/{nodeId} {
+          allow read: if isMember(teamId);
+          allow write: if canEdit(teamId);
+        }
+
+        // Everyone on the team can chat with the AI; only editors can change
+        // messages (e.g. marking a proposal as added to the tree).
+        match /messages/{messageId} {
+          allow read, create: if isMember(teamId);
+          allow update, delete: if canEdit(teamId);
+        }
+      }
+    }
+
+    match /invites/{inviteId} {
+      allow read: if signedIn() && resource.data.inviteeUid == request.auth.uid;
+      allow write: if false;
+    }
+  }
+}

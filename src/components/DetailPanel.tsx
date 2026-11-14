@@ -23,6 +23,7 @@ import {
 import { useStore } from "@/lib/store";
 import { childrenOf, findNode } from "@/lib/tree";
 import type { TreeNode } from "@/lib/types";
+import { AssignmentSection } from "./Assignment";
 import { ChatDock } from "./ChatPanel";
 import { FieldPanel, ReportToField } from "./FieldPanel";
 import { useUI } from "./uiContext";
@@ -57,7 +58,7 @@ function Section({ title, children, aside }: { title: string; children: React.Re
 }
 
 export function DetailPanel({ node }: { node: TreeNode }) {
-  const { state, dispatch } = useStore();
+  const { state, dispatch, canEdit } = useStore();
   const { openEditor, openUpload, openPaperSearch, openDecompose } = useUI();
   const [menu, setMenu] = useState(false);
 
@@ -121,7 +122,7 @@ export function DetailPanel({ node }: { node: TreeNode }) {
             </button>
           </div>
           <h2 className="text-[21px] font-semibold leading-[1.25] tracking-[-0.01em] text-neutral-950">{node.title}</h2>
-          {node.kind !== "suggestion" && (
+          {node.kind !== "suggestion" && canEdit && (
             <div className="relative flex flex-wrap items-center gap-2">
               {!isExp && (
                 <button
@@ -170,7 +171,7 @@ export function DetailPanel({ node }: { node: TreeNode }) {
         </div>
 
         {/* suggestion approval */}
-        {node.kind === "suggestion" && (
+        {node.kind === "suggestion" && canEdit && (
           <div className="space-y-3 rounded-xl border border-dashed border-neutral-400 p-4">
             <p className="text-[13px] leading-relaxed text-neutral-600">
               The AI suggested this after an unexpected result. Nothing changes in your tree until you approve it.
@@ -213,13 +214,18 @@ export function DetailPanel({ node }: { node: TreeNode }) {
           </Section>
         )}
 
+        {/* who on the team is working on this, and how far along it is */}
+        {node.kind === "hypothesis" && !node.folded && <AssignmentSection node={node} />}
+
         {/* evidence */}
         <Section
           title={`Evidence · ${node.evidence.length} paper${node.evidence.length === 1 ? "" : "s"}`}
           aside={
-            <button onClick={() => openPaperSearch(node.id)} className="text-[12px] font-medium text-neutral-500 hover:text-neutral-900">
-              + Find papers
-            </button>
+            canEdit && (
+              <button onClick={() => openPaperSearch(node.id)} className="text-[12px] font-medium text-neutral-500 hover:text-neutral-900">
+                + Find papers
+              </button>
+            )
           }
         >
           {node.evidence.length === 0 && <p className="text-[13px] text-neutral-400">No papers yet.</p>}
@@ -237,6 +243,7 @@ export function DetailPanel({ node }: { node: TreeNode }) {
                   )}
                 </p>
                 <button
+                  hidden={!canEdit}
                   onClick={() => dispatch({ type: "removeEvidence", id: node.id, index: i })}
                   title="Remove this evidence"
                   className="absolute right-2 top-2 rounded p-1 text-neutral-400 opacity-0 transition hover:bg-neutral-200 hover:text-rose-600 group-hover:opacity-100"
@@ -304,7 +311,7 @@ export function DetailPanel({ node }: { node: TreeNode }) {
               <ReportToField key={node.result.recordedAt} node={node} parent={parent} />
             </Section>
           ) : (
-            <button
+            canEdit && <button
               onClick={() => openUpload(node.id)}
               className="flex w-full flex-col items-center gap-1 rounded-xl border-2 border-dashed border-neutral-200 py-6 text-neutral-500 transition hover:border-neutral-400 hover:text-neutral-800"
             >
@@ -323,7 +330,7 @@ export function DetailPanel({ node }: { node: TreeNode }) {
                   <button onClick={() => select(s.id)} className="text-left text-[13.5px] leading-snug text-neutral-800 hover:text-neutral-950">
                     {s.title}
                   </button>
-                  <div className="mt-2 flex items-center gap-2">
+                  <div className={`mt-2 flex items-center gap-2 ${canEdit ? "" : "hidden"}`}>
                     <button
                       onClick={() => dispatch({ type: "approveSuggestion", id: s.id })}
                       className="rounded-md bg-neutral-900 px-2.5 py-1 text-xs font-semibold text-white hover:bg-neutral-700"
