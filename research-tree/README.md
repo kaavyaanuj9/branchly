@@ -18,6 +18,39 @@ python3 -m venv --system-site-packages .venv && .venv/bin/pip install fastembed
 .venv/bin/python server.py
 ```
 
+## Fields: one engine, several maps
+
+Each instance covers one field, chosen with `RT_FIELD` (profiles in `fields/`). Each field has its own
+data folder (`data/<field>/`) and port, so several maps can run side by side.
+
+| `RT_FIELD` | Covers | Source | Port |
+|---|---|---|---|
+| `llm_agents` (default) | LLM-agent papers since Oct 2022 | arXiv listings + API, release schedule Sun–Thu 20:00 ET | 8765 |
+| `cancer_cell_bio` | Cancer biology, cell biology and pharmacology preprints since Nov 2024, plus the published papers they cite | bioRxiv API, polled every 20 min | 8766 |
+
+The biology map has two layers, because a cancer preprint cites mostly journal papers (only about
+5–10% of its references are other preprints):
+
+- **Frontier:** bioRxiv preprints, updated through the day. References come from the paper's JATS XML
+  on day 0 and from Semantic Scholar later.
+- **Foundations:** published papers that the preprints cite at least twice, added with abstracts.
+  Lineages, reading lists and evidence can then reach the established literature.
+
+Build a field from scratch (each step is resumable):
+
+```bash
+export RT_FIELD=cancer_cell_bio            # S2_API_KEY in .env strongly recommended
+python3 build.py --history                 # preprints month by month + their references
+python3 build.py --foundations             # published papers cited >= 2 times
+python3 build.py --refs                    # references of the foundations
+python3 embeddings.py --sentences          # search vectors (papers + sentences)
+python3 build.py --rebuild                 # grow the topic tree
+python3 server.py
+```
+
+To add a field, copy a profile in `fields/` and set its sources, scope, curated top-level branches
+(with keyword patterns that seed them), coverage text, paper links and Semantic Scholar id format.
+
 ## Search ("locate my idea")
 
 Your idea is embedded with a small local model (bge-small) and compared with every paper. The 15

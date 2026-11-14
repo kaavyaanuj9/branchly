@@ -26,8 +26,9 @@ READ = ToolAnnotations(read_only_hint=True, open_world_hint=False)
 server = MCPServer(
     "research-tree",
     instructions=(
-        "A live map of LLM-agent research from arXiv (~25k papers since Oct 2022, new papers added "
-        "within minutes of each arXiv release). Typical flow: find_frontiers or tree_overview to pick "
+        "A live map of one research field (tree_overview says which, e.g. LLM agents from arXiv or "
+        "cancer & cell biology from bioRxiv), with new papers added as they appear. "
+        "Typical flow: find_frontiers or tree_overview to pick "
         "a direction; locate_idea to see where an idea sits and how crowded it is; check_combination "
         "to see whether problem + method + setting has been done; reading_list for what to read; "
         "paper_lineage to follow who builds on whom; post_signal to tell others what you are working "
@@ -62,7 +63,7 @@ def _date(ts):
 
 
 def _paper(p, abstract=0):
-    out = {"arxiv_id": p["id"], "title": p["title"], "public": _date(p.get("announced")),
+    out = {"paper_id": p["id"], "title": p["title"], "public": _date(p.get("announced")),
            "url": p.get("url") or f"https://arxiv.org/abs/{p['id']}"}
     if "built_on" in p:
         out["built_on_by_papers_in_tree"] = p["built_on"]
@@ -97,7 +98,7 @@ def tree_overview() -> str:
                     "momentum": b["momentum"],
                     "fastest_growing_topics": [{"topic": n["label"], "node_id": n["id"], "momentum": n["momentum"],
                                                 "new_this_week": n["n7"]} for n in hot]})
-    return _out({"papers_total": tree["count"], "branches": out})
+    return _out({"field": tree["label"], "papers_total": tree["count"], "branches": out})
 
 
 @server.tool(annotations=READ)
@@ -120,7 +121,7 @@ def read_topic(node_id: str) -> str:
     """Details of one branch or topic: path, keywords, stats, who has claimed it or marked it
     promising / a dead end (with their notes), newest papers, nearest topics in other branches
     (often where new ideas are), and landmark papers."""
-    d = _call(f"/api/node/{urllib.parse.quote(node_id)}", {"limit": 12})
+    d = _call(f"/api/node/{urllib.parse.quote(node_id, safe='')}", {"limit": 12})
     return _out({"topic": d["label"], "path": " > ".join(p["label"] for p in d["path"]), "keywords": d["keywords"],
                  "papers": d["count"], "new_this_week": d["n7"], "momentum": d["momentum"],
                  "signals": d["signals"], "notes_from_others": d["signal_log"][:10],
@@ -171,10 +172,10 @@ def reading_list(idea: str) -> str:
 
 
 @server.tool(annotations=READ)
-def paper_lineage(arxiv_id: str) -> str:
+def paper_lineage(paper_id: str) -> str:
     """A paper's lineage inside the tree: what it builds on (most related first) and what has built
     on it (newest first), plus its abstract and position on the tree."""
-    d = _call(f"/api/lineage/paper/{urllib.parse.quote(arxiv_id)}")
+    d = _call(f"/api/lineage/paper/{urllib.parse.quote(paper_id, safe='')}")
     return _out({"paper": _paper(d["paper"], 1200), "path": " > ".join(p["label"] for p in d["path"][1:]),
                  "builds_on": [_paper(p) for p in d["builds_on"]],
                  "built_on_by": [_paper(p) for p in d["built_on_by"]],

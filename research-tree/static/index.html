@@ -967,6 +967,9 @@ svg.on("click", () => {});
   liveText();
   connect();
   refreshAlertBadge();
+  // deep link from HypoTree: /?q=<idea> opens the map located at that idea
+  const q0 = new URLSearchParams(location.search).get("q");
+  if (q0) { document.getElementById("q").value = q0; document.getElementById("locate").requestSubmit(); }
 })();
 </script>
 </body>
