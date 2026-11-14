@@ -19,6 +19,8 @@ import { descendantIds, findNode } from "./tree";
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface AppState {
+  /** Which project this is (projects are kept side by side in the browser). */
+  projectId: string;
   title: string;
   nodes: TreeNode[];
   selectedId: string | null;
@@ -28,6 +30,7 @@ export interface AppState {
 }
 
 const initialState: AppState = {
+  projectId: "sample",
   title: sampleProject.title,
   nodes: sampleProject.nodes,
   selectedId: null,
@@ -38,6 +41,8 @@ const initialState: AppState = {
 type Action =
   | { type: "load"; saved: Partial<AppState> | null }
   | { type: "reset" }
+  | { type: "openProject"; project: SavedProject & { projectId: string } }
+  | { type: "newProject"; title: string; nodes: TreeNode[]; selectedId?: string }
   | { type: "select"; id: string | null }
   | { type: "addNode"; node: TreeNode; select?: boolean }
   | { type: "updateNode"; id: string; patch: Partial<TreeNode> }
@@ -76,6 +81,20 @@ function reducer(state: AppState, action: Action): AppState {
 
     case "reset":
       return { ...initialState, hydrated: true };
+
+    case "openProject":
+      return { ...initialState, ...action.project, selectedId: null, hydrated: true };
+
+    case "newProject":
+      return {
+        ...initialState,
+        projectId: newId(),
+        title: action.title,
+        nodes: action.nodes,
+        chats: {},
+        selectedId: action.selectedId ?? null,
+        hydrated: true,
+      };
 
     case "select":
       return { ...state, selectedId: action.id };
@@ -133,6 +152,7 @@ function reducer(state: AppState, action: Action): AppState {
         result: action.result,
         status: action.result.outcome,
         collapsed: false,
+        fieldReported: undefined, // a new result can be reported again
       });
       // The experiment's result also updates its parent idea's status.
       const parent = findNode(nodes, exp.parentId);
@@ -261,6 +281,35 @@ function reducer(state: AppState, action: Action): AppState {
 }
 
 const STORAGE_KEY = "hypotree-state-v1";
+const LIBRARY_KEY = "hypotree-projects-v1";
+
+/** A project as kept in the browser's project list. */
+export interface SavedProject {
+  title: string;
+  nodes: TreeNode[];
+  chats: Record<string, ChatMessage[]>;
+  updated: number;
+}
+
+function readLibrary(): Record<string, SavedProject> {
+  try {
+    return JSON.parse(localStorage.getItem(LIBRARY_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+/** All projects in this browser, most recently changed first. */
+export function listProjects(): { id: string; title: string; updated: number }[] {
+  return Object.entries(readLibrary())
+    .map(([id, p]) => ({ id, title: p.title, updated: p.updated }))
+    .sort((a, b) => b.updated - a.updated);
+}
+
+export function getProject(id: string): (SavedProject & { projectId: string }) | null {
+  const p = readLibrary()[id];
+  return p ? { ...p, projectId: id } : null;
+}
 
 const StoreContext = createContext<{
   state: AppState;
@@ -287,6 +336,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (!state.hydrated) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      // keep the project list in step, so switching projects never loses work
+      const lib = readLibrary();
+      lib[state.projectId || "sample"] = { title: state.title, nodes: state.nodes, chats: state.chats, updated: Date.now() };
+      localStorage.setItem(LIBRARY_KEY, JSON.stringify(lib));
     } catch {
       /* storage full or blocked: keep working without saving */
     }

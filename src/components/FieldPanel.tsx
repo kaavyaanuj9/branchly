@@ -8,11 +8,13 @@ import {
   FlaskConical,
   Loader2,
   Map,
+  Megaphone,
   Plus,
   RefreshCw,
 } from "lucide-react";
 import { fieldQuery } from "@/lib/fieldQuery";
 import { useStore } from "@/lib/store";
+import { unseenHits } from "./FieldSync";
 import type { Evidence, TreeNode } from "@/lib/types";
 import { useFieldNav } from "./fieldNav";
 import { useUI } from "./uiContext";
@@ -58,7 +60,7 @@ function citationOf(p: FieldPaper) {
   return `${first}${(p.authors?.length || 0) > 1 ? " et al." : ""} (${year(p.announced)})`;
 }
 
-function toEvidence(p: FieldPaper): Evidence {
+export function toEvidence(p: FieldPaper): Evidence {
   const quote = p.evidence ? Object.values(p.evidence)[0] : undefined;
   const firstSentences = (p.abstract || "").split(/(?<=\.)\s+/).slice(0, 2).join(" ");
   return {
@@ -72,12 +74,16 @@ function toEvidence(p: FieldPaper): Evidence {
 
 export function FieldPanel({ node, parent }: { node: TreeNode; parent?: TreeNode }) {
   const isExp = node.kind === "experiment";
-  const [tab, setTab] = useState<Tab | null>(isExp ? null : "where");
+  const [tab, setTab] = useState<Tab | null>(isExp ? null : unseenHits(node) ? "watch" : "where");
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "where", label: "Where it sits", icon: <Map className="size-3" /> },
     { id: "tested", label: "Tested?", icon: <FlaskConical className="size-3" /> },
     { id: "read", label: "Read", icon: <BookOpen className="size-3" /> },
-    { id: "watch", label: "Watch", icon: <BellRing className="size-3" /> },
+    {
+      id: "watch",
+      label: unseenHits(node) ? `Watch · ${unseenHits(node)} new` : "Watch",
+      icon: <BellRing className="size-3" />,
+    },
   ];
   return (
     <section className="space-y-2">
@@ -404,6 +410,119 @@ export function ReadingList({ node, query }: { node?: TreeNode; query?: string }
   );
 }
 
+// ── report an experiment back to the field ───────────────────────────────────
+
+const REPORT = {
+  contradicted: { kind: "dead_end", verb: "Report a dead end", done: "Reported as a dead end" },
+  supported: { kind: "promising", verb: "Mark the topic promising", done: "Marked promising" },
+  inconclusive: { kind: "note", verb: "Leave a note", done: "Note left" },
+} as const;
+
+/**
+ * After a result, one click tells every lab using the field map what happened on this topic.
+ * A dead end with what failed is what saves the next lab weeks.
+ */
+export function ReportToField({ node, parent }: { node: TreeNode; parent?: TreeNode }) {
+  const { state, dispatch } = useStore();
+  const { openFieldMap } = useUI();
+  const outcome = node.result?.outcome;
+  const topic = parent?.fieldTopic;
+  const r = outcome ? REPORT[outcome] : null;
+  const [text, setText] = useState(() =>
+    [parent?.title && `Idea: ${parent.title}`, `Test: ${node.title}`, node.result?.notes && `Result: ${node.result.notes}`]
+      .filter(Boolean)
+      .join("\n")
+      .slice(0, 900),
+  );
+  const [who, setWho] = useState(() => {
+    try {
+      return localStorage.getItem("rt_who") || state.title;
+    } catch {
+      return state.title;
+    }
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const loadLabel = useCallback(
+    () => getJSON<{ label: string }>(`/api/field/topic?id=${encodeURIComponent(topic || "")}`).then((d) => d.label),
+    [topic],
+  );
+  const { data: label } = useLoad(loadLabel, Boolean(topic));
+  if (!r || !node.result) return null;
+
+  if (!topic)
+    return (
+      <p className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-[12px] text-slate-500">
+        This idea has no clear home on the field map yet, so there is no topic to report the result to.
+      </p>
+    );
+
+  if (node.fieldReported)
+    return (
+      <p className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 p-2.5 text-[12px] text-emerald-800">
+        <Check className="size-3.5" /> {REPORT[outcome!].done} on <b>{label ?? "the field map"}</b>. Every lab on the map
+        can see it.
+        <button onClick={() => openFieldMap(topic)} className="ml-auto shrink-0 font-medium hover:underline">
+          View
+        </button>
+      </p>
+    );
+
+  return (
+    <div className="space-y-2 rounded-xl border border-indigo-200 bg-indigo-50/50 p-3">
+      <p className="flex items-center gap-1.5 text-[12.5px] font-semibold text-indigo-900">
+        <Megaphone className="size-3.5" /> Tell the field: {r.verb.toLowerCase()} on “{label ?? "…"}”
+      </p>
+      <p className="text-[11.5px] text-indigo-900/70">
+        {outcome === "contradicted"
+          ? "Other labs working here will see what failed before they repeat it."
+          : "Other labs working here will see this on the field map."}{" "}
+        Edit before posting; it is public.
+      </p>
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        rows={4}
+        className="w-full rounded-md border border-indigo-200 bg-white px-2 py-1.5 text-[12px] focus:border-indigo-400 focus:outline-none"
+      />
+      <input
+        value={who}
+        onChange={(e) => setWho(e.target.value)}
+        placeholder="Your name or lab"
+        className="w-full rounded-md border border-indigo-200 bg-white px-2 py-1.5 text-[12px] focus:border-indigo-400 focus:outline-none"
+      />
+      <button
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          setError(null);
+          try {
+            localStorage.setItem("rt_who", who);
+          } catch {
+            /* ignore */
+          }
+          try {
+            await getJSON("/api/field/signal", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ node: topic, kind: r.kind, who: who || "anonymous", text, visibility: "public" }),
+            });
+            dispatch({ type: "updateNode", id: node.id, patch: { fieldReported: r.kind } });
+          } catch (e) {
+            setError(message(e));
+          } finally {
+            setBusy(false);
+          }
+        }}
+        className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-indigo-700 py-1.5 text-[12.5px] font-semibold text-white hover:bg-indigo-800 disabled:opacity-60"
+      >
+        {busy ? <Loader2 className="size-3 animate-spin" /> : <Megaphone className="size-3" />} {r.verb}
+      </button>
+      {error && <p className="rounded-md bg-rose-50 p-2 text-[12px] text-rose-700">{error}</p>}
+    </div>
+  );
+}
+
 // ── watch the field ──────────────────────────────────────────────────────────
 
 function WatchField({ node }: { node: TreeNode }) {
@@ -419,6 +538,14 @@ function WatchField({ node }: { node: TreeNode }) {
     [token],
   );
   const { data: hits, error: loadError, loading, run: refresh } = useLoad(load, Boolean(token));
+  // looking at the list counts as seeing these papers (clears the "N new" badge on the box)
+  const [fresh] = useState(() => new Set((node.fieldHits ?? []).filter((id) => !(node.fieldSeen ?? []).includes(id))));
+  const hitIds = hits?.map((h) => h.id).join("|");
+  useEffect(() => {
+    if (hitIds === undefined) return;
+    const ids = hitIds ? hitIds.split("|") : [];
+    dispatch({ type: "updateNode", id: node.id, patch: { fieldHits: ids, fieldSeen: ids } });
+  }, [hitIds, node.id, dispatch]);
   const busy = creating || loading;
   const error = createError || loadError;
 
@@ -429,7 +556,7 @@ function WatchField({ node }: { node: TreeNode }) {
       const r = await getJSON<{ token: string }>("/api/field/watch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: node.title }),
+        body: JSON.stringify({ query: node.title, label: node.title }),
       });
       dispatch({ type: "updateNode", id: node.id, patch: { fieldWatch: r.token } });
     } catch (e) {
@@ -473,7 +600,12 @@ function WatchField({ node }: { node: TreeNode }) {
       </div>
       {error && <p className="rounded-md bg-rose-50 p-2 text-[12px] text-rose-700">{error}</p>}
       {hits?.slice(0, 8).map((p) => (
-        <PaperRow key={p.id} paper={p} node={node} />
+        <PaperRow
+          key={p.id}
+          paper={p}
+          node={node}
+          extra={fresh.has(p.id) && <span className="mt-1 inline-block rounded bg-rose-600 px-1 text-[10px] font-bold text-white">new</span>}
+        />
       ))}
     </div>
   );

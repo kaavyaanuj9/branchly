@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
 import {
   BookOpen,
+  ChevronsUpDown,
   CircleHelp,
   FlaskConical,
   MessageSquare,
@@ -14,7 +15,8 @@ import {
   Sparkles,
   Upload,
 } from "lucide-react";
-import { StoreProvider, useStore } from "@/lib/store";
+import { getProject, listProjects, StoreProvider, useStore } from "@/lib/store";
+import { FieldSync } from "./FieldSync";
 import { findNode } from "@/lib/tree";
 import { TreeCanvas } from "./TreeCanvas";
 import { FieldMapView } from "./FieldMapView";
@@ -107,6 +109,7 @@ function Workspace() {
 
   return (
     <UIContext.Provider value={ui}>
+      <FieldSync />
       <div className="flex h-dvh flex-col bg-white text-slate-900">
         {/* Header */}
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200 px-5">
@@ -118,7 +121,7 @@ function Workspace() {
               HypoTree
             </span>
             <span className="h-5 w-px bg-slate-200" />
-            <h1 className="truncate text-[15px] font-semibold text-slate-900">{state.title}</h1>
+            <ProjectSwitcher />
           </div>
           <div className="flex items-center gap-4 text-sm text-slate-500">
             <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-[13px]">
@@ -273,6 +276,53 @@ function LegendRow({ swatch, children }: { swatch: string; children: React.React
     <div className="flex items-center gap-2">
       <span className={`h-3 w-5 rounded-[3px] ${swatch}`} />
       {children}
+    </div>
+  );
+}
+
+/** The project title, which opens the list of projects kept in this browser. */
+function ProjectSwitcher() {
+  const { state, dispatch } = useStore();
+  const [open, setOpen] = useState(false);
+  const [projects, setProjects] = useState<{ id: string; title: string; updated: number }[]>([]);
+  return (
+    <div className="relative min-w-0">
+      <button
+        onClick={() => {
+          setProjects(listProjects());
+          setOpen(!open);
+        }}
+        title="Switch project"
+        className="flex min-w-0 items-center gap-1 rounded-md px-1.5 py-1 hover:bg-slate-100"
+      >
+        <h1 className="truncate text-[15px] font-semibold text-slate-900">{state.title}</h1>
+        <ChevronsUpDown className="size-3.5 shrink-0 text-slate-400" />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-10 z-50 w-[420px] max-w-[90vw] rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg">
+          <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            Projects in this browser
+          </p>
+          {projects.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => {
+                const proj = p.id === state.projectId ? null : getProject(p.id);
+                if (proj) dispatch({ type: "openProject", project: proj });
+                setOpen(false);
+              }}
+              className={`block w-full truncate rounded-md px-2 py-1.5 text-left text-[13px] ${
+                p.id === state.projectId ? "bg-indigo-50 font-semibold text-indigo-800" : "text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              {p.title}
+            </button>
+          ))}
+          <p className="border-t border-slate-100 px-2 pb-1 pt-2 text-[11.5px] text-slate-500">
+            Start a new project from an idea on the <b>Field map</b>: search it, then “Start a new hypothesis tree”.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

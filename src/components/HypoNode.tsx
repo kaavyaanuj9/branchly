@@ -11,11 +11,13 @@ import {
   Search,
   Sparkles,
   Archive,
+  BellRing,
   X,
 } from "lucide-react";
 import type { TreeNode } from "@/lib/types";
 import { useStore } from "@/lib/store";
 import { NODE_WIDTH } from "@/lib/tree";
+import { unseenHits } from "./FieldSync";
 import { StatusBadge } from "./StatusBadge";
 import { useUI } from "./uiContext";
 
@@ -25,6 +27,41 @@ export type HypoFlowNode = Node<
   { node: TreeNode; depth: number; childCount: number; hiddenCount: number },
   "hypo"
 >;
+
+const NOVELTY = {
+  crowded: { label: "crowded field", cls: "border-amber-200 bg-amber-50 text-amber-800" },
+  related: { label: "related work", cls: "border-sky-200 bg-sky-50 text-sky-800" },
+  sparse: { label: "open ground", cls: "border-emerald-200 bg-emerald-50 text-emerald-800" },
+} as const;
+
+/** What the field says about this box: how crowded it is, and new papers from its alert. */
+function FieldChips({ node }: { node: TreeNode }) {
+  const fresh = unseenHits(node);
+  if (!node.fieldNovelty && !fresh) return null;
+  const nov = node.fieldNovelty ? NOVELTY[node.fieldNovelty] : null;
+  return (
+    <span className="flex flex-wrap items-center gap-1">
+      {nov && (
+        <span
+          title={`Field map: ${node.fieldRelevant ?? "?"} of the 20 closest papers directly address this${
+            node.fieldNoHome ? " (no clear home on the map)" : ""
+          }`}
+          className={`rounded border px-1 py-px text-[8.5px] font-semibold ${nov.cls}`}
+        >
+          {nov.label}
+        </span>
+      )}
+      {fresh > 0 && (
+        <span
+          title="New papers matched this box's field alert. Open the box: In the field › Watch."
+          className="flex items-center gap-0.5 rounded bg-rose-600 px-1 py-px text-[8.5px] font-bold text-white"
+        >
+          <BellRing className="size-2.5" /> {fresh} new
+        </span>
+      )}
+    </span>
+  );
+}
 
 export function HypoNode({ data, selected }: NodeProps<HypoFlowNode>) {
   const { node, depth, childCount, hiddenCount } = data;
@@ -115,6 +152,9 @@ export function HypoNode({ data, selected }: NodeProps<HypoFlowNode>) {
         <p className="text-[11.5px] font-semibold leading-snug text-slate-900">
           {node.title}
         </p>
+        <div className="mt-1.5">
+          <FieldChips node={node} />
+        </div>
         {toggle}
       </div>
     );
@@ -218,10 +258,11 @@ export function HypoNode({ data, selected }: NodeProps<HypoFlowNode>) {
       </p>
 
       <div className="mt-1.5 flex min-h-5 items-end justify-between">
-        <span>
+        <span className="flex flex-wrap items-center gap-1">
           {node.status !== "untested" && node.status !== "planned" && (
             <StatusBadge status={node.status} />
           )}
+          {!isExp && <FieldChips node={node} />}
         </span>
         <button
           onClick={(e) => {

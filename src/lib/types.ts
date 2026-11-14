@@ -94,6 +94,14 @@ export interface TreeNode {
   fieldTopicFor?: string;
   /** Located, but no clear home on the field map (placement confidence too low). */
   fieldNoHome?: boolean;
+  /** How crowded this idea's neighbourhood is: of the 20 closest papers, how many address it. */
+  fieldNovelty?: "crowded" | "related" | "sparse";
+  fieldRelevant?: number;
+  /** Papers the box's field alert has matched, and those the team has already looked at. */
+  fieldHits?: string[];
+  fieldSeen?: string[];
+  /** What this experiment's result was reported to the field as (dead_end / promising / note). */
+  fieldReported?: string;
   foldedReason?: string;
 }
 

@@ -21,7 +21,7 @@ import {
 import { useStore } from "@/lib/store";
 import { childrenOf, findNode } from "@/lib/tree";
 import type { TreeNode } from "@/lib/types";
-import { FieldPanel } from "./FieldPanel";
+import { FieldPanel, ReportToField } from "./FieldPanel";
 import { StatusBadge } from "./StatusBadge";
 import { useUI } from "./uiContext";
 
@@ -271,6 +271,7 @@ export function DetailPanel({ node }: { node: TreeNode }) {
                   </p>
                 </div>
               </div>
+              <ReportToField key={node.result.recordedAt} node={node} parent={parent} />
             </Section>
           ) : (
             <button

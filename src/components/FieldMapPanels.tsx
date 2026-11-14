@@ -13,11 +13,13 @@ import {
   Map as MapIcon,
   NotebookPen,
   Sparkles,
+  Sprout,
+  GitBranchPlus,
   X,
 } from "lucide-react";
-import { useStore } from "@/lib/store";
+import { newId, useStore } from "@/lib/store";
 import type { TreeNode } from "@/lib/types";
-import { PaperRow, ReadingList, TestedCheck, type FieldPaper } from "./FieldPanel";
+import { PaperRow, ReadingList, TestedCheck, toEvidence, type FieldPaper } from "./FieldPanel";
 import { loadAlerts, useFieldNav, type SavedAlert } from "./fieldNav";
 import { useUI } from "./uiContext";
 
@@ -247,6 +249,7 @@ interface LocateResult {
   novelty_level: "crowded" | "related" | "sparse";
   novelty_hint: string;
   placement_confidence: number;
+  directly_relevant?: number | null;
   bridge?: { id: string; label: string } | null;
   nearest: FieldPaper[];
 }
@@ -307,6 +310,7 @@ export function IdeaPanel({
               {located.novelty_hint}
             </div>
           </div>
+          <BringToProject q={q} located={located} />
           <div className="flex flex-wrap gap-1">
             {tabs.map((t) => (
               <button
@@ -338,6 +342,128 @@ export function IdeaPanel({
         </>
       )}
     </Panel>
+  );
+}
+
+// ── from the field map into HypoTree ─────────────────────────────────────────
+
+/** Turn an idea found on the field map into a hypothesis tree, or a box in the current one. */
+function BringToProject({ q, located }: { q: string; located: LocateResult }) {
+  const { state, dispatch } = useStore();
+  const { setView } = useUI();
+  const [claim, setClaim] = useState(true);
+  const [busy, setBusy] = useState<"new" | "add" | null>(null);
+  const box = state.nodes.find((n) => n.id === state.selectedId);
+  const parent = box && (box.kind === "root" || box.kind === "hypothesis") && !box.folded ? box : null;
+  const home = located.placement_confidence >= 0.35;
+  const fieldBits = {
+    fieldTopic: home ? located.node : undefined,
+    fieldNoHome: !home,
+    fieldNovelty: located.novelty_level,
+    fieldRelevant: located.directly_relevant ?? undefined,
+  };
+  const evidence = located.nearest.slice(0, 3).map(toEvidence);
+
+  // the alert and (optionally) a private claim on the topic: best effort, never blocks
+  const tellTheField = async () => {
+    const watch = await getJSON<{ token: string }>("/api/field/watch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: q, label: q }),
+    }).catch(() => null);
+    if (claim && home)
+      await getJSON("/api/field/signal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ node: located.node, kind: "claim", who: state.title, text: q, visibility: "private" }),
+      }).catch(() => null);
+    return watch?.token;
+  };
+
+  const startTree = async () => {
+    setBusy("new");
+    const token = await tellTheField();
+    dispatch({
+      type: "newProject",
+      title: q.length > 90 ? q.slice(0, 87) + "…" : q,
+      selectedId: "root",
+      nodes: [
+        {
+          id: "root",
+          parentId: null,
+          kind: "root",
+          title: q,
+          status: "untested",
+          rationale: `Started from the field map: ${located.path.slice(1).map((p) => p.label).join(" › ")}. ${located.novelty_hint}`,
+          evidence,
+          fieldWatch: token,
+          fieldTopicFor: q,
+          ...fieldBits,
+        },
+      ],
+    });
+    setBusy(null);
+    setView("project");
+  };
+
+  const addUnder = async () => {
+    if (!parent) return;
+    setBusy("add");
+    const token = await tellTheField();
+    const id = newId();
+    dispatch({
+      type: "addNode",
+      select: true,
+      node: {
+        id,
+        parentId: parent.id,
+        kind: "hypothesis",
+        title: q,
+        status: "untested",
+        rationale: `Found on the field map (${located.path.slice(1).map((p) => p.label).join(" › ")}). ${located.novelty_hint}`,
+        evidence,
+        fieldWatch: token,
+        // placed again with its new parent as context
+        fieldNovelty: located.novelty_level,
+        fieldRelevant: located.directly_relevant ?? undefined,
+      },
+    });
+    setBusy(null);
+    setView("project");
+  };
+
+  return (
+    <section className="space-y-2 rounded-xl border border-indigo-200 bg-indigo-50/50 p-3">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-indigo-600">Take it into HypoTree</p>
+      <button
+        onClick={startTree}
+        disabled={!!busy}
+        className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-indigo-700 py-2 text-[12.5px] font-semibold text-white hover:bg-indigo-800 disabled:opacity-60"
+      >
+        {busy === "new" ? <Loader2 className="size-3.5 animate-spin" /> : <Sprout className="size-3.5" />}
+        Start a new hypothesis tree from this
+      </button>
+      {parent && (
+        <button
+          onClick={addUnder}
+          disabled={!!busy}
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-indigo-300 bg-white py-1.5 text-[12px] font-medium text-indigo-800 hover:bg-indigo-50 disabled:opacity-60"
+        >
+          {busy === "add" ? <Loader2 className="size-3.5 animate-spin" /> : <GitBranchPlus className="size-3.5" />}
+          Add under “{parent.title.slice(0, 48)}{parent.title.length > 48 ? "…" : ""}”
+        </button>
+      )}
+      <p className="text-[11px] leading-relaxed text-indigo-900/70">
+        Brings along the 3 closest papers as evidence and an alert for new ones. Your current project stays in the
+        project list (click its title).
+      </p>
+      {home && (
+        <label className="flex items-start gap-1.5 text-[11.5px] text-indigo-900/80">
+          <input type="checkbox" checked={claim} onChange={(e) => setClaim(e.target.checked)} className="mt-0.5" />
+          Let the field know a team is working here (private: counted on the map, your name isn&apos;t shown)
+        </label>
+      )}
+    </section>
   );
 }
 

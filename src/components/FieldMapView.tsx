@@ -20,8 +20,10 @@ import {
   BellRing,
   ChevronRight,
   Flame,
+  Crosshair,
   GitFork,
   Hand,
+  Lightbulb,
   LayoutList,
   Loader2,
   Network,
@@ -29,7 +31,6 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { fieldQuery, MIN_PLACEMENT_CONFIDENCE } from "@/lib/fieldQuery";
 import { useStore } from "@/lib/store";
 import type { TreeNode } from "@/lib/types";
 import { FieldLineage, type LineageTarget } from "./FieldLineage";
@@ -152,7 +153,6 @@ function FieldMap() {
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<Set<string>>(new Set(["root"]));
   const [selected, setSelected] = useState<string | null>(null);
-  const [placing, setPlacing] = useState(0);
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [showHomeless, setShowHomeless] = useState(false);
@@ -263,41 +263,6 @@ function FieldMap() {
   }, [root]);
   const colorOf = useMemo(() => ({ get: (id: string) => colorMap.get(id) }), [colorMap]);
   const colorFn = useCallback((branch: string) => colorMap.get(branch) ?? "#64748b", [colorMap]);
-
-  // Place the team's ideas on the map, each with its parent idea as context; remembered on the
-  // box and redone when its title or parent changes. Weak placements get no badge.
-  useEffect(() => {
-    const queryOf = (n: TreeNode) => fieldQuery(n, state.nodes.find((p) => p.id === n.parentId));
-    const todo = state.nodes.filter(
-      (n) => (n.kind === "root" || n.kind === "hypothesis") && !n.folded && n.fieldTopicFor !== queryOf(n),
-    );
-    if (!root || todo.length === 0) return;
-    let live = true;
-    (async () => {
-      for (const n of todo) {
-        if (!live) return;
-        setPlacing(todo.length - todo.indexOf(n));
-        try {
-          const q = queryOf(n);
-          const r = await getJSON<{ node: string; placement_confidence: number }>(
-            `/api/field/locate?q=${encodeURIComponent(q)}`,
-          );
-          const home = r.placement_confidence >= MIN_PLACEMENT_CONFIDENCE;
-          dispatch({
-            type: "updateNode",
-            id: n.id,
-            patch: { fieldTopic: home ? r.node : undefined, fieldNoHome: !home, fieldTopicFor: q },
-          });
-        } catch {
-          /* map unreachable: leave unplaced */
-        }
-      }
-      if (live) setPlacing(0);
-    })();
-    return () => {
-      live = false;
-    };
-  }, [root, state.nodes, dispatch]);
 
   // team ideas per field node (counted on the topic and every ancestor)
   const teamAt = useMemo(() => {
@@ -418,8 +383,12 @@ function FieldMap() {
 
   const locate = async (e: React.FormEvent) => {
     e.preventDefault();
-    const q = query.trim();
+    await runLocate(query.trim());
+  };
+  const runLocate = async (q: string) => {
     if (!q) return;
+    setQuery(q);
+    setMode("idea");
     setSearching(true);
     setLocated(null);
     setSide({ kind: "idea", q });
@@ -563,10 +532,11 @@ function FieldMap() {
             </button>
           </div>
         </div>
+        <WorkingOn />
         {canvas === "lineage" && lineageOf && (
           <button
             onClick={() => setLineageOf(null)}
-            className="absolute left-4 top-[4.25rem] z-10 rounded-lg border border-slate-200 bg-white/95 px-2 py-1 text-[11.5px] text-slate-600 shadow-sm hover:text-slate-900"
+            className="absolute left-4 top-[6.25rem] z-10 rounded-lg border border-slate-200 bg-white/95 px-2 py-1 text-[11.5px] text-slate-600 shadow-sm hover:text-slate-900"
           >
             ← lineage of the selected topic instead
           </button>
@@ -592,7 +562,7 @@ function FieldMap() {
           </div>
         )}
         {banner && (
-          <div className="absolute left-1/2 top-[4.25rem] z-20 flex -translate-x-1/2 items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12.5px] font-medium text-emerald-900 shadow-sm">
+          <div className="absolute left-1/2 top-[6.25rem] z-20 flex -translate-x-1/2 items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12.5px] font-medium text-emerald-900 shadow-sm">
             {banner}
             <button onClick={() => setBanner(null)} className="text-emerald-700/60 hover:text-emerald-900">
               <X className="size-3.5" />
@@ -619,11 +589,6 @@ function FieldMap() {
           <span className="flex items-center gap-1 text-indigo-600">
             <Hand className="size-3" /> someone is working on it
           </span>
-          {placing > 0 && (
-            <span className="flex items-center gap-1 text-slate-500">
-              <Loader2 className="size-3 animate-spin" /> placing your ideas ({placing} left)
-            </span>
-          )}
         </div>
         )}
         {status && (
@@ -647,6 +612,7 @@ function FieldMap() {
           team={teamAt.get(side.id) ?? []}
           onFocus={nav.openTopic}
           onLineage={(id) => nav.openLineage("node", id)}
+          onIdea={(q) => runLocate(q)}
           onAlert={addAlert}
           onSignal={() => reloadTree().catch(() => {})}
           onClose={() => {
@@ -729,6 +695,7 @@ function TopicPanel({
   team,
   onFocus,
   onLineage,
+  onIdea,
   onAlert,
   onSignal,
   onClose,
@@ -737,6 +704,7 @@ function TopicPanel({
   team: TreeNode[];
   onFocus: (id: string) => void;
   onLineage: (id: string) => void;
+  onIdea: (q: string) => void;
   onAlert: (a: SavedAlert) => void;
   onSignal: () => void;
   onClose: () => void;
@@ -817,6 +785,8 @@ function TopicPanel({
                 <CreateAlert spec={{ node: d.id }} label={d.path.slice(1).map((p) => p.label).join(" › ")} onCreated={onAlert} />
               </div>
             </div>
+
+            <IdeaHere label={d.label} onIdea={onIdea} />
 
             <SignalsSection
               node={d.id}
@@ -930,5 +900,59 @@ function TopicPanel({
           </>
         )}
     </Panel>
+  );
+}
+
+/** Which project box "+ Evidence" adds papers to, so that is never a surprise. */
+function WorkingOn() {
+  const { state, dispatch } = useStore();
+  const box = state.nodes.find((n) => n.id === state.selectedId);
+  return (
+    <div className="pointer-events-auto absolute left-4 top-[4.25rem] z-10 hidden max-w-[460px] items-center gap-1.5 rounded-lg border border-slate-200 bg-white/95 px-2 py-1 text-[11.5px] text-slate-600 shadow-sm md:flex">
+      <Crosshair className="size-3.5 shrink-0 text-indigo-500" />
+      {box ? (
+        <>
+          <span className="truncate">
+            Papers go to: <b className="text-slate-800">{box.title}</b>
+          </span>
+          <button onClick={() => dispatch({ type: "select", id: null })} className="text-slate-400 hover:text-slate-800" title="Unselect">
+            <X className="size-3" />
+          </button>
+        </>
+      ) : (
+        <span>No box selected: pick one in the project tree to collect papers into it</span>
+      )}
+    </div>
+  );
+}
+
+/** Have an idea in this topic? Check it, then take it into HypoTree. */
+function IdeaHere({ label, onIdea }: { label: string; onIdea: (q: string) => void }) {
+  const [text, setText] = useState("");
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (text.trim()) onIdea(text.trim());
+      }}
+      className="space-y-1.5 rounded-xl border border-indigo-200 bg-indigo-50/50 p-3"
+    >
+      <p className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-indigo-600">
+        <Lightbulb className="size-3.5" /> Have an idea here?
+      </p>
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        rows={2}
+        placeholder={`A hypothesis in ${label}…`}
+        className="w-full rounded-md border border-indigo-200 bg-white px-2 py-1.5 text-[12.5px] focus:border-indigo-400 focus:outline-none"
+      />
+      <button
+        disabled={!text.trim()}
+        className="w-full rounded-lg bg-indigo-700 py-1.5 text-[12px] font-semibold text-white hover:bg-indigo-800 disabled:opacity-50"
+      >
+        Check it against the field, then start a tree
+      </button>
+    </form>
   );
 }
