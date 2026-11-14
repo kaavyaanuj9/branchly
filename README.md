@@ -81,12 +81,21 @@ crowded or open. It runs as its own service, and HypoTree uses it as its literat
 - **Grounded AI:** each box's agent and **Break Down** get the closest real papers and cite them
   as [n]. They say so when none of them apply, instead of inventing citations.
 
-Run the cancer & cell biology map (bioRxiv preprints + the published papers they cite):
+**Field map view:** use the **Project tree / Field map** switch in the header. The field map
+shows the whole field (curated branches → grown topics, sized by activity, with 🔥 on fast-growing
+topics) and places your project's ideas on it (blue badges). Click any topic to see its newest
+papers and add them to the selected box's evidence, plus the neighbouring topics in other branches
+and the most built-on papers. **Show on the field map** in a box's panel jumps to its spot.
+
+Run everything with one command (the field map's Python backend plus HypoTree):
 
 ```bash
-cd research-tree
-RT_FIELD=cancer_cell_bio python3 server.py     # http://127.0.0.1:8766
+npm run dev:all       # RT_FIELD=cell_death by default; RT_PYTHON=path/to/python if needed
 ```
+
+Or start the backend on its own: `cd research-tree && RT_FIELD=cell_death python3 server.py`
+(port 8766). Fields available: `cell_death` (cancer cell death, the demo), `cancer_cell_bio`
+(cancer & cell biology), `llm_agents`.
 
 First-time build of its data: see `research-tree/README.md` ("Fields"). Set `RESEARCH_TREE_URL` in
 `.env.local` if it runs elsewhere. Without it, HypoTree still works; the panel says the map is unreachable.
@@ -111,6 +120,8 @@ Force one with `AI_BACKEND=api` or `AI_BACKEND=claude-code`.
 | `src/lib/researchTree.ts` | Client for the Research Tree field map (locate, reading list, combination check, alerts). |
 | `src/app/api/field/[action]/route.ts` | Server routes behind the **In the field** panel. |
 | `src/components/FieldPanel.tsx` | The **In the field** panel on each box. |
+| `src/components/FieldMapView.tsx` | The **Field map** view: the whole field, with your ideas placed on it. |
+| `scripts/dev-all.sh` | `npm run dev:all`: HypoTree + the field map backend together. |
 | `research-tree/` | The field-scale literature map (Python service). |
 | `src/lib/semanticScholar.ts` | Semantic Scholar Academic Graph API search and citation formatting. |
 | `src/app/api/chat/route.ts` | Route handler for node-scoped Claude conversation. |

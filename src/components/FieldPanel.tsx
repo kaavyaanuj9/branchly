@@ -5,7 +5,6 @@ import {
   BellRing,
   BookOpen,
   Check,
-  ExternalLink,
   FlaskConical,
   Loader2,
   Map,
@@ -14,6 +13,7 @@ import {
 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import type { Evidence, TreeNode } from "@/lib/types";
+import { useUI } from "./uiContext";
 
 // "Field" panel: the team's box seen against the whole field, from Research Tree (the
 // cross-lab literature map). HypoTree is the project; Research Tree is everyone else's work.
@@ -22,7 +22,7 @@ import type { Evidence, TreeNode } from "@/lib/types";
 //   Read           - reading list from the citation lineage around the idea
 //   Watch          - an alert: new papers that directly address this box
 
-interface FieldPaper {
+export interface FieldPaper {
   id: string;
   title: string;
   authors: string[];
@@ -144,9 +144,10 @@ function Status({ loading, error, note }: { loading: boolean; error: string | nu
   return null;
 }
 
-function PaperRow({ paper, node, extra }: { paper: FieldPaper; node: TreeNode; extra?: React.ReactNode }) {
+/** One paper; "+ Evidence" adds it to `node` (the selected project box), if there is one. */
+export function PaperRow({ paper, node, extra }: { paper: FieldPaper; node?: TreeNode; extra?: React.ReactNode }) {
   const { dispatch } = useStore();
-  const added = node.evidence.some((e) => e.url === paper.url || e.paperId === paper.id);
+  const added = !!node?.evidence.some((e) => e.url === paper.url || e.paperId === paper.id);
   return (
     <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-2.5 text-[12.5px] leading-snug">
       <div className="flex items-start justify-between gap-2">
@@ -159,9 +160,15 @@ function PaperRow({ paper, node, extra }: { paper: FieldPaper; node: TreeNode; e
           {paper.title}
         </a>
         <button
-          disabled={added}
-          onClick={() => dispatch({ type: "addEvidence", id: node.id, evidence: toEvidence(paper) })}
-          title={added ? "Already in this box's evidence" : "Add to this box's evidence"}
+          disabled={added || !node}
+          onClick={() => node && dispatch({ type: "addEvidence", id: node.id, evidence: toEvidence(paper) })}
+          title={
+            !node
+              ? "Select a box in the project tree first"
+              : added
+                ? "Already in this box's evidence"
+                : `Add to the evidence of "${node.title.slice(0, 60)}"`
+          }
           className="flex shrink-0 items-center gap-0.5 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-600 hover:border-emerald-300 hover:text-emerald-700 disabled:opacity-60"
         >
           {added ? <Check className="size-3" /> : <Plus className="size-3" />} Evidence
@@ -179,13 +186,13 @@ function PaperRow({ paper, node, extra }: { paper: FieldPaper; node: TreeNode; e
 // ── where it sits ────────────────────────────────────────────────────────────
 
 interface LocateResult {
+  node: string;
   path: { id: string; label: string }[];
   novelty_level: "crowded" | "related" | "sparse";
   novelty_hint: string;
   directly_relevant: number | null;
   placement_confidence: number;
   nearest: FieldPaper[];
-  mapUrl: string;
 }
 
 const NOVELTY_STYLE = {
@@ -200,6 +207,7 @@ function WhereItSits({ node }: { node: TreeNode }) {
     [node.title],
   );
   const { data, error, loading } = useLoad(load);
+  const { openFieldMap } = useUI();
   return (
     <div className="space-y-2">
       <Status loading={loading} error={error} />
@@ -217,14 +225,12 @@ function WhereItSits({ node }: { node: TreeNode }) {
           {data.nearest.slice(0, 5).map((p) => (
             <PaperRow key={p.id} paper={p} node={node} />
           ))}
-          <a
-            href={data.mapUrl}
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            onClick={() => openFieldMap(data.node)}
             className="inline-flex items-center gap-1 text-[12px] font-medium text-emerald-700 hover:underline"
           >
-            Open this spot in the field map <ExternalLink className="size-3" />
-          </a>
+            Show on the field map <Map className="size-3" />
+          </button>
         </>
       )}
     </div>

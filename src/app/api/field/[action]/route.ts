@@ -5,6 +5,8 @@ import * as rt from "@/lib/researchTree";
 // map) so the browser only ever talks to HypoTree.
 //
 //   GET  /api/field/status
+//   GET  /api/field/tree                    the whole field map (branches, topics, stats)
+//   GET  /api/field/topic?id=...            one branch/topic: papers, neighbours, landmarks
 //   GET  /api/field/locate?q=...            where an idea sits, novelty, closest papers
 //   GET  /api/field/reading?q=...           reading list from the citation lineage
 //   GET  /api/field/aspects?problem=&method=&setting=   has this combination been done?
@@ -24,6 +26,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ acti
     switch (action) {
       case "status":
         return NextResponse.json({ ...(await rt.status()), mapUrl: rt.fieldUrl() });
+      case "tree":
+        return NextResponse.json(await rt.tree());
+      case "topic": {
+        const id = q.get("id");
+        if (!id) return NextResponse.json({ error: "missing id" }, { status: 400 });
+        return NextResponse.json(await rt.topic(id));
+      }
       case "locate": {
         const text = q.get("q")?.trim();
         if (!text) return NextResponse.json({ error: "missing q" }, { status: 400 });

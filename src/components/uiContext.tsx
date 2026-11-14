@@ -15,6 +15,12 @@ export interface UIContextValue {
   openUpload: (experimentId: string) => void;
   openPaperSearch: (nodeId?: string) => void;
   openDecompose: (nodeId: string) => void;
+  /** Which canvas is showing: the team's project tree, or the field map around it. */
+  view: "project" | "field";
+  setView: (view: "project" | "field") => void;
+  /** Switch to the field map, focused on a topic (Research Tree node id) if given. */
+  openFieldMap: (topicId?: string) => void;
+  fieldFocus: string | null;
 }
 
 export const UIContext = createContext<UIContextValue | null>(null);

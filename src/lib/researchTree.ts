@@ -64,6 +64,30 @@ export function status() {
   return call<{ field: string; coverage: string; papers: number }>("/api/status");
 }
 
+export interface FieldTreeNode {
+  id: string;
+  label: string;
+  depth: number;
+  branch?: string;
+  keywords?: string[];
+  count: number;
+  n7: number;
+  n14: number;
+  momentum: number;
+  children?: FieldTreeNode[];
+  tips?: FieldPaper[];
+}
+
+/** The whole field map: root -> curated branches -> grown topics, with per-node stats. */
+export function tree() {
+  return call<FieldTreeNode & { status: { field: string; coverage: string } }>("/api/tree");
+}
+
+/** One branch or topic: stats, newest papers, nearest topics elsewhere, landmarks. */
+export function topic(id: string) {
+  return call<Record<string, unknown>>(`/api/node/${encodeURIComponent(id)}?limit=30`);
+}
+
 export function locate(text: string) {
   return call<LocateResult>(`/api/locate?${new URLSearchParams({ q: text.slice(0, 4000) })}`);
 }

@@ -88,6 +88,9 @@ export interface TreeNode {
   folded?: boolean;
   /** Research Tree alert watching the field for new papers on this box (its token). */
   fieldWatch?: string;
+  /** Where this box sits on the field map (a Research Tree topic id), and for which title. */
+  fieldTopic?: string;
+  fieldTopicFor?: string;
   foldedReason?: string;
 }
 

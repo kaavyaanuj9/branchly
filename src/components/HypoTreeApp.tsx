@@ -17,6 +17,7 @@ import {
 import { StoreProvider, useStore } from "@/lib/store";
 import { findNode } from "@/lib/tree";
 import { TreeCanvas } from "./TreeCanvas";
+import { FieldMapView } from "./FieldMapView";
 import { DetailPanel } from "./DetailPanel";
 import { ChatPanel } from "./ChatPanel";
 import { HelpModal, NodeEditorModal, UploadResultModal } from "./Modals";
@@ -44,6 +45,8 @@ function Workspace() {
   const [paperSearchFor, setPaperSearchFor] = useState<string | null>(null);
   const [decomposeFor, setDecomposeFor] = useState<string | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [view, setView] = useState<"project" | "field">("project");
+  const [fieldFocus, setFieldFocus] = useState<string | null>(null);
 
   const selected = findNode(state.nodes, state.selectedId);
 
@@ -55,8 +58,15 @@ function Workspace() {
       openUpload: setUploadFor,
       openPaperSearch: (id) => setPaperSearchFor(id || state.selectedId || "root"),
       openDecompose: (id) => setDecomposeFor(id),
+      view,
+      setView,
+      fieldFocus,
+      openFieldMap: (topicId) => {
+        setFieldFocus(topicId ?? null);
+        setView("field");
+      },
     }),
-    [chatOpen, state.selectedId],
+    [chatOpen, state.selectedId, view, fieldFocus],
   );
 
   // Esc closes the side panels and modals.
@@ -111,7 +121,24 @@ function Workspace() {
             <h1 className="truncate text-[15px] font-semibold text-slate-900">{state.title}</h1>
           </div>
           <div className="flex items-center gap-4 text-sm text-slate-500">
-            <span className="hidden sm:inline">Tree View</span>
+            <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-[13px]">
+              {(
+                [
+                  ["project", "Project tree"],
+                  ["field", "Field map"],
+                ] as const
+              ).map(([v, label]) => (
+                <button
+                  key={v}
+                  onClick={() => setView(v)}
+                  className={`rounded-md px-3 py-1 font-medium transition ${
+                    view === v ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <button
               onClick={() => setHelpOpen(true)}
               className="rounded-full p-1 transition hover:bg-slate-100 hover:text-slate-900"
@@ -122,8 +149,10 @@ function Workspace() {
           </div>
         </header>
 
-        {/* Toolbar */}
-        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-200 px-5 py-2.5">
+        {/* Toolbar (project tree only; the field map has its own search) */}
+        <div
+          className={`${view === "field" ? "hidden" : "flex"} shrink-0 flex-wrap items-center gap-2 border-b border-slate-200 px-5 py-2.5`}
+        >
           <button
             onClick={() => setEditor({ mode: "add", parentId: addParentId, kind: "hypothesis" })}
             className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-[13px] font-medium text-white shadow-sm transition hover:bg-slate-800"
@@ -172,6 +201,11 @@ function Workspace() {
         </div>
 
         {/* Workspace */}
+        {view === "field" ? (
+          <main className="flex min-h-0 flex-1">
+            <FieldMapView />
+          </main>
+        ) : (
         <main className="flex min-h-0 flex-1">
           <div className="relative min-w-0 flex-1 bg-[#fafbfc]">
             <TreeCanvas />
@@ -186,6 +220,7 @@ function Workspace() {
           {selected && <DetailPanel key={`d-${selected.id}`} node={selected} />}
           {selected && chatOpen && <ChatPanel key={`c-${selected.id}`} node={selected} />}
         </main>
+        )}
       </div>
 
       {editor && <NodeEditorModal request={editor} onClose={() => setEditor(null)} />}
